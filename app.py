@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-import requests
+import openai
 
 # ── Загрузка индекса ────────────────────────────────────────────
 @st.cache_resource
@@ -13,16 +13,17 @@ def load_vectorstore():
         "faiss_index", embeddings, allow_dangerous_deserialization=True
     )
 
-# ── Запрос к Qwen через DashScope ──────────────────────────────
+# ── Запрос к Qwen ───────────────────────────────────────────────
 def ask_qwen(prompt: str, api_key: str) -> str:
-    import dashscope
-    from dashscope import Generation
-    dashscope.api_key = api_key
-    response = Generation.call(
-        model="qwen-turbo",
+    client = openai.OpenAI(
+        api_key=api_key,
+        base_url="https://api.vsellm.ru/v1"
+    )
+    response = client.chat.completions.create(
+        model="qwen/qwen3-vl-8b-instruct",
         messages=[{"role": "user", "content": prompt}]
     )
-    return response.output.text
+    return response.choices[0].message.content
 
 # ── RAG ─────────────────────────────────────────────────────────
 def rag_answer(question: str, vectorstore, api_key: str, k: int = 3):
@@ -30,7 +31,7 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = 3):
     context = "\n\n---\n\n".join([d.page_content for d in docs])
 
     prompt = f"""Ты помощник по работе с системой Бизнес-Глоссарий.
-Отвечай только на основе контекста ниже. 
+Отвечай только на основе контекста ниже.
 Если ответа в контексте нет — скажи об этом прямо.
 
 Контекст:
@@ -45,7 +46,6 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = 3):
 st.set_page_config(page_title="Помощник БГ", page_icon="🤖")
 st.title("🤖 Помощник по Бизнес-Глоссарию")
 
-# API ключ из Streamlit Secrets
 api_key = st.secrets["QWEN_API_KEY"]
 
 vectorstore = load_vectorstore()
@@ -64,14 +64,19 @@ if question := st.chat_input("Задайте вопрос..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Ищу ответ..."):
-            answer, source_docs = rag_answer(question, vectorstore, api_key)
+            try:
+                answer, source_docs = rag_answer(question, vectorstore, api_key)
+            except Exception as e:
+                answer = f"Ошибка: {str(e)}"
+                source_docs = []
 
         st.markdown(answer)
 
-        with st.expander("📄 Источники"):
-            for i, doc in enumerate(source_docs, 1):
-                st.markdown(f"**{i}. {doc.metadata.get('topic', '')}**")
-                st.markdown(f"{doc.page_content[:200]}...")
-                st.markdown(f"*Файл: {doc.metadata.get('source_file', '')}*")
+        if source_docs:
+            with st.expander("📄 Источники"):
+                for i, doc in enumerate(source_docs, 1):
+                    st.markdown(f"**{i}. {doc.metadata.get('topic', '')}**")
+                    st.markdown(f"{doc.page_content[:200]}...")
+                    st.markdown(f"*Файл: {doc.metadata.get('source_file', '')}*")
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
