@@ -1,82 +1,581 @@
+"""
+Глосси — ИИ-ассистент по Бизнес-Глоссарию
+GitHub MVP v0.2: RAG + Supabase логирование + системный промпт + статистика
+"""
+
 import streamlit as st
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 import openai
+from supabase import create_client, Client
+from datetime import datetime
 
-# ── Загрузка индекса ────────────────────────────────────────────
-@st.cache_resource
+# ═══════════════════════════════════════════════════════════════
+# КОНФИГ
+# ═══════════════════════════════════════════════════════════════
+MODEL_NAME   = "qwen/qwen3-vl-8b-instruct"
+EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+FAISS_PATH   = "faiss_index"
+API_BASE_URL = "https://api.vsellm.ru/v1"
+TOP_K        = 4
+
+SYSTEM_PROMPT = """Ты — Глосси, дружелюбный ИИ-ассистент по работе с отчётами Банка в Бизнес-глоссарии (БГ).
+
+## Твоя личность
+- Общаешься тепло, профессионально, без лишней воды
+- Если вопрос неоднозначный — уточняешь, не угадываешь
+- Если чего-то не знаешь — честно говоришь об этом
+
+## Что ты умеешь
+1. Отвечать на общие вопросы по отчётам и Бизнес-глоссарию
+2. Рассказать какие бывают типы запросов и отчётов
+3. Провести по процессу работы с отчётами — верхнеуровнево или пошагово
+4. Показать конкретные шаги по запросу
+5. Провести по каждому шагу с подробным описанием каждого действия
+6. Отвечать на вопросы в рамках управления отчётным ландшафтом
+
+## Что ты НЕ умеешь (говори об этом прямо)
+- Давать информацию по конкретным отчётам
+- Генерировать атрибутный состав (направляй пользователя в раздел «Сформировать атрибуты»)
+- Создавать карточки запросов
+
+## Как определить сценарий пользователя
+Перед ответом мысленно определи кто перед тобой и адаптируй стиль:
+- 🆕 Новичок — первый раз в БГ, нужна общая ориентация
+- 🎯 Задача — есть конкретное изменение которое нужно внести в БГ
+- 🤔 Сомнения — не уверен нужна ли регистрация или какие действия предпринять
+- 🔄 Опытный — работает с БГ, но есть конкретный вопрос
+- 😟 Трудности — не может что-то описать в БГ, нужна помощь
+- 🔍 Информация — хочет узнать детали по своему отчёту
+
+## Сценарий «Проведи меня по процессу»
+Если пользователь просит провести по сценарию работы с отчётом — сначала уточни:
+«Как вам удобнее?
+1️⃣ Верхнеуровнево — общее понимание этапов без лишних деталей
+2️⃣ Подробно — детальное описание каждого шага, чтобы можно было сразу вносить информацию в БГ»
+Дождись ответа и только потом начинай объяснение.
+
+## Правила ответа
+- Отвечай ТОЛЬКО на основе контекста из базы знаний ниже
+- Если ответа в контексте нет — скажи: «У меня нет информации по этому вопросу в базе знаний. Обратитесь к команде Управления отчётным ландшафтом или Аналитики данных — контакты в разделе «Контакты».»
+- Не придумывай факты, названия отчётов и цифры
+- Структурируй длинные ответы с нумерацией или эмодзи
+- Если вопрос касается конкретного отчёта — мягко напомни что этой информации у тебя нет
+"""
+
+WELCOME_MESSAGE = """Привет! 👋 Я — **Глосси**, ИИ-ассистент по работе с отчётами Банка в Бизнес-глоссарии.
+
+**Чем могу помочь:**
+1. Ответить на общие вопросы по отчётам и БГ
+2. Рассказать про типы запросов и отчётов
+3. Провести по процессу работы с отчётами — верхнеуровнево или пошагово
+4. Помочь разобраться с конкретным шагом или трудностью
+
+**Пока не умею:**
+— Давать информацию по конкретным отчётам
+— Генерировать атрибутный состав → раздел «Сформировать атрибуты»
+— Создавать карточки запросов
+
+Выбери вопрос или напиши свой:
+> 💬 «Как определить, входит ли мой отчёт в отчётный ландшафт?»
+> 💬 «Что нужно чтобы зарегистрировать новый отчёт?»
+> 💬 «Проведи меня по процессу работы с отчётом»
+"""
+
+
+# ═══════════════════════════════════════════════════════════════
+# ПОДКЛЮЧЕНИЯ
+# ═══════════════════════════════════════════════════════════════
+@st.cache_resource(show_spinner=False)
 def load_vectorstore():
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    )
+    embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
     return FAISS.load_local(
-        "faiss_index", embeddings, allow_dangerous_deserialization=True
+        FAISS_PATH, embeddings, allow_dangerous_deserialization=True
     )
 
-# ── Запрос к Qwen ───────────────────────────────────────────────
-def ask_qwen(prompt: str, api_key: str) -> str:
-    client = openai.OpenAI(
-        api_key=api_key,
-        base_url="https://api.vsellm.ru/v1"
-    )
+@st.cache_resource(show_spinner=False)
+def get_supabase() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+
+# ═══════════════════════════════════════════════════════════════
+# LLM
+# ═══════════════════════════════════════════════════════════════
+def ask_qwen(messages: list, api_key: str) -> str:
+    client = openai.OpenAI(api_key=api_key, base_url=API_BASE_URL)
     response = client.chat.completions.create(
-        model="qwen/qwen3-vl-8b-instruct",
-        messages=[{"role": "user", "content": prompt}]
+        model=MODEL_NAME,
+        messages=messages,
     )
     return response.choices[0].message.content
 
-# ── RAG ─────────────────────────────────────────────────────────
-def rag_answer(question: str, vectorstore, api_key: str, k: int = 3):
-    docs = vectorstore.similarity_search(question, k=k)
-    context = "\n\n---\n\n".join([d.page_content for d in docs])
 
-    prompt = f"""Ты помощник по работе с системой Бизнес-Глоссарий.
-Отвечай только на основе контекста ниже.
-Если ответа в контексте нет — скажи об этом прямо.
+# ═══════════════════════════════════════════════════════════════
+# RAG
+# ═══════════════════════════════════════════════════════════════
+def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
+    results   = vectorstore.similarity_search_with_score(question, k=k)
+    docs, raw = zip(*results) if results else ([], [])
+    scores    = [round(1 / (1 + d), 3) for d in raw]
+    avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
 
-Контекст:
-{context}
+    context          = "\n\n---\n\n".join([d.page_content for d in docs])
+    no_answer_marker = "ОТВЕТА_НЕТ"
 
-Вопрос: {question}
-Ответ:"""
+    # системный промпт + контекст + история + вопрос
+    messages = [
+        {
+            "role"   : "system",
+            "content": SYSTEM_PROMPT + f"\n\n## Контекст из базы знаний\n{context}"
+                       + f"\n\nЕсли ответа в контексте нет — напиши ровно одно слово: {no_answer_marker}",
+        }
+    ]
+    # добавляем последние 6 сообщений истории для контекста диалога
+    for msg in st.session_state.messages[-6:]:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+    # текущий вопрос
+    messages.append({"role": "user", "content": question})
 
-    return ask_qwen(prompt, api_key), docs
+    answer    = ask_qwen(messages, api_key)
+    no_answer = no_answer_marker.lower() in answer.lower()
+    return answer, list(docs), scores, avg_score, no_answer
 
-# ── UI ──────────────────────────────────────────────────────────
-st.set_page_config(page_title="Помощник БГ", page_icon="🤖")
-st.title("🤖 Помощник по Бизнес-Глоссарию")
 
-api_key = st.secrets["QWEN_API_KEY"]
+# ═══════════════════════════════════════════════════════════════
+# SUPABASE — запись и обновление
+# ═══════════════════════════════════════════════════════════════
+def db_insert_log(question, answer, avg_score, no_answer, sources) -> int | None:
+    """Вставляет запись в chat_logs, возвращает id."""
+    try:
+        sb = get_supabase()
+        res = sb.table("chat_logs").insert({
+            "question" : question,
+            "answer"   : answer,
+            "avg_score": avg_score,
+            "no_answer": no_answer,
+            "feedback" : None,
+            "sources"  : sources,
+        }).execute()
+        return res.data[0]["id"] if res.data else None
+    except Exception as e:
+        st.toast(f"⚠️ Не удалось сохранить в БД: {e}", icon="⚠️")
+        return None
 
-vectorstore = load_vectorstore()
+def db_update_feedback(row_id: int, feedback: str):
+    try:
+        get_supabase().table("chat_logs").update(
+            {"feedback": feedback}
+        ).eq("id", row_id).execute()
+    except Exception as e:
+        st.toast(f"⚠️ Не удалось обновить оценку: {e}", icon="⚠️")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+@st.cache_data(ttl=30, show_spinner=False)
+def db_load_logs():
+    """Загружает все логи из Supabase (кэш 30 сек)."""
+    try:
+        res = get_supabase().table("chat_logs") \
+            .select("*").order("created_at").execute()
+        return res.data or []
+    except Exception:
+        return []
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+@st.cache_data(ttl=30, show_spinner=False)
+def db_load_metrics():
+    """Считает метрики прямо из БД."""
+    logs  = db_load_logs()
+    total = len(logs)
+    if total == 0:
+        return {"total": 0, "likes": 0, "dislikes": 0,
+                "no_answer": 0, "avg_score": 0.0}
+    likes    = sum(1 for r in logs if r["feedback"] == "like")
+    dislikes = sum(1 for r in logs if r["feedback"] == "dislike")
+    no_ans   = sum(1 for r in logs if r["no_answer"])
+    avg_sc   = round(sum(r["avg_score"] or 0 for r in logs) / total, 3)
+    return {"total": total, "likes": likes, "dislikes": dislikes,
+            "no_answer": no_ans, "avg_score": avg_sc}
 
-if question := st.chat_input("Задайте вопрос..."):
-    st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.markdown(question)
 
-    with st.chat_message("assistant"):
-        with st.spinner("Ищу ответ..."):
-            try:
-                answer, source_docs = rag_answer(question, vectorstore, api_key)
-            except Exception as e:
-                answer = f"Ошибка: {str(e)}"
-                source_docs = []
+# ═══════════════════════════════════════════════════════════════
+# SESSION STATE
+# ═══════════════════════════════════════════════════════════════
+def init_state():
+    if "messages" not in st.session_state:
+        # приветственное сообщение сразу в истории
+        st.session_state.messages = [
+            {"role": "assistant", "content": WELCOME_MESSAGE, "log_id": None}
+        ]
+    if "session_metrics" not in st.session_state:
+        st.session_state.session_metrics = {
+            "total": 0, "likes": 0, "dislikes": 0,
+            "no_answer": 0, "_score_sum": 0.0, "avg_score": 0.0,
+        }
 
-        st.markdown(answer)
+def update_session_metrics(no_answer: bool, avg_score: float):
+    m = st.session_state.session_metrics
+    m["total"]    += 1
+    m["_score_sum"] += avg_score
+    m["avg_score"]  = round(m["_score_sum"] / m["total"], 3)
+    if no_answer:
+        m["no_answer"] += 1
 
-        if source_docs:
-            with st.expander("📄 Источники"):
-                for i, doc in enumerate(source_docs, 1):
-                    st.markdown(f"**{i}. {doc.metadata.get('topic', '')}**")
-                    st.markdown(f"{doc.page_content[:200]}...")
-                    st.markdown(f"*Файл: {doc.metadata.get('source_file', '')}*")
+def update_session_feedback(old_fb, new_fb):
+    m = st.session_state.session_metrics
+    if old_fb == "like":    m["likes"]    = max(0, m["likes"] - 1)
+    elif old_fb == "dislike": m["dislikes"] = max(0, m["dislikes"] - 1)
+    if new_fb == "like":    m["likes"]    += 1
+    elif new_fb == "dislike": m["dislikes"] += 1
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+
+# ═══════════════════════════════════════════════════════════════
+# СТИЛИ
+# ═══════════════════════════════════════════════════════════════
+def inject_styles():
+    st.markdown("""
+    <style>
+    .stApp { background: #f0fdf8; }
+
+    .glossy-header {
+        background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
+        border-radius: 16px; padding: 1.75rem 2.5rem 1.5rem;
+        margin-bottom: 1.25rem; color: white;
+        position: relative; overflow: hidden;
+    }
+    .glossy-header::before {
+        content: "✦"; position: absolute; right: 2rem; top: 0.5rem;
+        font-size: 5rem; opacity: 0.12; line-height: 1;
+    }
+    .glossy-header h1 { margin: 0; font-size: 1.8rem; font-weight: 700; }
+    .glossy-header p  { margin: 0.3rem 0 0; opacity: 0.85; font-size: 0.9rem; }
+
+    .metric-row { display: flex; gap: 0.7rem; margin-bottom: 1.1rem; flex-wrap: wrap; }
+    .metric-card {
+        background: white; border: 1px solid #d1fae5; border-radius: 12px;
+        padding: 0.7rem 1.1rem; flex: 1; min-width: 105px;
+        text-align: center; box-shadow: 0 1px 4px rgba(16,185,129,.07);
+    }
+    .metric-card .val { font-size: 1.5rem; font-weight: 700; color: #065f46; line-height: 1.1; }
+    .metric-card .lbl { font-size: 0.7rem; color: #6b7280; margin-top: 0.15rem; }
+
+    .score-bar-wrap { background: #e5e7eb; border-radius: 4px; height: 5px; margin-top: 3px; }
+    .score-bar      { background: #10b981; border-radius: 4px; height: 5px; }
+
+    .no-answer-box {
+        background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px;
+        padding: 0.4rem 0.8rem; font-size: 0.83rem; color: #92400e; margin-top: 0.35rem;
+    }
+    .fb-like    { color: #10b981; font-weight: 600; }
+    .fb-dislike { color: #ef4444; font-weight: 600; }
+    .fb-none    { color: #d1d5db; }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# КОМПОНЕНТЫ
+# ═══════════════════════════════════════════════════════════════
+def render_metrics_bar(m: dict):
+    total = m["total"] or 1
+    lk_p  = round(m["likes"]     / total * 100)
+    no_p  = round(m["no_answer"] / total * 100)
+    st.markdown(f"""
+    <div class="metric-row">
+        <div class="metric-card"><div class="val">{m['total']}</div><div class="lbl">Вопросов</div></div>
+        <div class="metric-card"><div class="val">👍 {m['likes']}</div><div class="lbl">Помогло ({lk_p}%)</div></div>
+        <div class="metric-card"><div class="val">👎 {m['dislikes']}</div><div class="lbl">Не помогло</div></div>
+        <div class="metric-card"><div class="val">{no_p}%</div><div class="lbl">«Не знаю»</div></div>
+        <div class="metric-card"><div class="val">{m['avg_score']:.2f}</div><div class="lbl">Avg score</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_assistant_message(content, log_id, avg_score=0.0, no_answer=False, docs=None, scores=None):
+    st.markdown(content)
+
+    if no_answer:
+        st.markdown(
+            '<div class="no-answer-box">⚠️ Ответ не найден в базе знаний. '
+            'Попробуйте переформулировать вопрос.</div>',
+            unsafe_allow_html=True,
+        )
+
+    if docs:
+        with st.expander(f"📄 Источники  ·  avg score {avg_score:.2f}"):
+            for i, (doc, score) in enumerate(zip(docs, scores or []), 1):
+                topic = doc.metadata.get("topic", "—")
+                src   = doc.metadata.get("source_file", "")
+                bar_w = int(score * 100)
+                st.markdown(f"**{i}. {topic}** — `{src}`")
+                st.markdown(
+                    f'<div class="score-bar-wrap">'
+                    f'<div class="score-bar" style="width:{bar_w}%"></div></div>'
+                    f'<small style="color:#6b7280">релевантность: {score}</small>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(doc.page_content[:200] + "…")
+
+    # кнопки фидбека — только для залогированных сообщений
+    if log_id is None:
+        return
+
+    cur_fb = next(
+        (m["feedback"] for m in st.session_state.messages
+         if m.get("log_id") == log_id), None
+    )
+    c1, c2, _ = st.columns([1, 1, 8])
+    with c1:
+        lbl = "✅ Помогло" if cur_fb == "like" else "👍 Помогло"
+        if st.button(lbl, key=f"like_{log_id}", use_container_width=True):
+            db_update_feedback(log_id, "like")
+            update_session_feedback(cur_fb, "like")
+            # обновляем в истории
+            for m in st.session_state.messages:
+                if m.get("log_id") == log_id:
+                    m["feedback"] = "like"
+            db_load_logs.clear()
+            db_load_metrics.clear()
+            st.rerun()
+    with c2:
+        lbl = "❌ Нет" if cur_fb == "dislike" else "👎 Нет"
+        if st.button(lbl, key=f"dis_{log_id}", use_container_width=True):
+            db_update_feedback(log_id, "dislike")
+            update_session_feedback(cur_fb, "dislike")
+            for m in st.session_state.messages:
+                if m.get("log_id") == log_id:
+                    m["feedback"] = "dislike"
+            db_load_logs.clear()
+            db_load_metrics.clear()
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════
+# ВКЛАДКА — ЧАТ
+# ═══════════════════════════════════════════════════════════════
+def tab_chat(vectorstore, api_key):
+    render_metrics_bar(st.session_state.session_metrics)
+
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            if msg["role"] == "assistant":
+                render_assistant_message(
+                    content   = msg["content"],
+                    log_id    = msg.get("log_id"),
+                    avg_score = msg.get("avg_score", 0.0),
+                    no_answer = msg.get("no_answer", False),
+                )
+            else:
+                st.markdown(msg["content"])
+
+    if question := st.chat_input("Задайте вопрос по Бизнес-Глоссарию…"):
+        if not api_key:
+            st.error("Нет API ключа.")
+            return
+
+        st.session_state.messages.append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Глосси думает…"):
+                try:
+                    answer, docs, scores, avg_score, no_answer = rag_answer(
+                        question, vectorstore, api_key
+                    )
+                except Exception as e:
+                    answer = f"Ошибка: {e}"
+                    docs, scores, avg_score, no_answer = [], [], 0.0, False
+
+            sources_payload = [
+                {
+                    "topic"  : d.metadata.get("topic", ""),
+                    "file"   : d.metadata.get("source_file", ""),
+                    "score"  : scores[i] if i < len(scores) else None,
+                    "snippet": d.page_content[:150],
+                }
+                for i, d in enumerate(docs)
+            ]
+
+            log_id = db_insert_log(question, answer, avg_score, no_answer, sources_payload)
+            update_session_metrics(no_answer, avg_score)
+
+            st.session_state.messages.append({
+                "role"     : "assistant",
+                "content"  : answer,
+                "log_id"   : log_id,
+                "avg_score": avg_score,
+                "no_answer": no_answer,
+                "feedback" : None,
+            })
+
+            render_assistant_message(answer, log_id, avg_score, no_answer, docs, scores)
+            db_load_logs.clear()
+            db_load_metrics.clear()
+
+
+# ═══════════════════════════════════════════════════════════════
+# ВКЛАДКА — СТАТИСТИКА
+# ═══════════════════════════════════════════════════════════════
+def tab_stats():
+    import pandas as pd
+    from collections import Counter
+
+    st.markdown("## 📊 Статистика — все сессии")
+
+    logs    = db_load_logs()
+    metrics = db_load_metrics()
+    total   = metrics["total"]
+
+    if total == 0:
+        st.info("Пока вопросов не было. Перейдите во вкладку «Чат» и задайте первый вопрос!")
+        return
+
+    # сводные метрики
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Всего вопросов",  total)
+    c2.metric("👍 Помогло",      metrics["likes"],
+              f"{round(metrics['likes']/total*100)}%")
+    c3.metric("👎 Не помогло",   metrics["dislikes"],
+              f"{round(metrics['dislikes']/total*100)}%")
+    c4.metric("⚠️ «Не знаю»",   metrics["no_answer"],
+              f"{round(metrics['no_answer']/total*100)}%")
+    c5.metric("Avg retrieval",   metrics["avg_score"])
+
+    st.markdown("---")
+
+    # динамика score
+    st.markdown("### 📈 Релевантность поиска по вопросам")
+    if len(logs) >= 2:
+        df_sc = pd.DataFrame({
+            "№"    : range(1, len(logs) + 1),
+            "Score": [r["avg_score"] or 0 for r in logs],
+        }).set_index("№")
+        st.line_chart(df_sc)
+    else:
+        st.caption("Нужно минимум 2 вопроса для графика.")
+
+    st.markdown("---")
+
+    # топ источников
+    st.markdown("### 📄 Топ источников")
+    all_sources = []
+    for rec in logs:
+        for src in (rec.get("sources") or []):
+            label = src.get("topic") or src.get("file") or "—"
+            all_sources.append(label)
+
+    if all_sources:
+        top    = Counter(all_sources).most_common(10)
+        df_top = pd.DataFrame(top, columns=["Источник", "Раз использован"])
+        st.dataframe(df_top, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # лента вопросов
+    st.markdown("### 🗂️ Все вопросы")
+    fb_filter = st.selectbox(
+        "Фильтр:",
+        ["Все", "👍 Помогло", "👎 Не помогло", "Без оценки"],
+        key="fb_filter",
+    )
+    filter_map = {"Все": None, "👍 Помогло": "like",
+                  "👎 Не помогло": "dislike", "Без оценки": "none"}
+    selected = filter_map[fb_filter]
+
+    shown = 0
+    for rec in reversed(logs):
+        fb = rec["feedback"]
+        if selected == "none"              and fb is not None:   continue
+        if selected in ("like","dislike")  and fb != selected:  continue
+
+        fb_html = (
+            '<span class="fb-like">👍 Помогло</span>'       if fb == "like"    else
+            '<span class="fb-dislike">👎 Не помогло</span>' if fb == "dislike" else
+            '<span class="fb-none">— без оценки</span>'
+        )
+        no_tag = ' · <span style="color:#f59e0b">⚠️ «Не знаю»</span>' if rec["no_answer"] else ""
+        ts     = rec.get("created_at", "")[:16].replace("T", " ")
+
+        with st.expander(
+            f"#{rec['id']}  {ts}  ·  score {rec['avg_score']:.2f}",
+            expanded=False,
+        ):
+            st.markdown(f"**Вопрос:** {rec['question']}")
+            st.markdown(f"**Ответ:** {rec['answer']}")
+            st.markdown(f"**Оценка:** {fb_html}{no_tag}", unsafe_allow_html=True)
+            if rec.get("sources"):
+                st.markdown("**Источники:**")
+                for s in rec["sources"]:
+                    bar = int((s.get("score") or 0) * 100)
+                    st.markdown(
+                        f"- `{s.get('topic','—')}` score {s.get('score')}  "
+                        f'<span style="display:inline-block;width:80px;vertical-align:middle">'
+                        f'<div class="score-bar-wrap">'
+                        f'<div class="score-bar" style="width:{bar}%"></div>'
+                        f'</div></span>',
+                        unsafe_allow_html=True,
+                    )
+        shown += 1
+
+    if shown == 0:
+        st.info("Нет записей по выбранному фильтру.")
+
+
+# ═══════════════════════════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════════════════════════
+def main():
+    st.set_page_config(
+        page_title="Глосси — ИИ-ассистент",
+        page_icon="🤖",
+        layout="wide",
+    )
+    inject_styles()
+    init_state()
+
+    st.markdown("""
+    <div class="glossy-header">
+        <h1>🤖 Глосси</h1>
+        <p>ИИ-ассистент по Бизнес-Глоссарию · задайте вопрос — получите ответ из базы знаний</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    try:
+        api_key = st.secrets["QWEN_API_KEY"]
+    except Exception:
+        api_key = None
+        st.warning("⚠️ Добавьте QWEN_API_KEY в `.streamlit/secrets.toml`")
+
+    vectorstore = None
+    try:
+        vectorstore = load_vectorstore()
+    except Exception as e:
+        st.error(f"❌ Не удалось загрузить FAISS-индекс: {e}")
+
+    tab1, tab2 = st.tabs(["💬 Чат", "📊 Статистика"])
+
+    with tab1:
+        if vectorstore:
+            tab_chat(vectorstore, api_key)
+        else:
+            st.info("Индекс не загружен — убедитесь, что папка `faiss_index` рядом с `app.py`.")
+
+    with tab2:
+        tab_stats()
+
+    with st.sidebar:
+        st.markdown("### 🤖 Глосси v0.2")
+        st.caption("RAG · FAISS · Qwen · Supabase")
+        st.markdown("---")
+        m = st.session_state.session_metrics
+        st.caption(f"Вопросов в сессии: **{m['total']}**")
+        st.caption(f"👍 {m['likes']}  👎 {m['dislikes']}")
+        st.markdown("---")
+        if st.button("🗑️ Очистить чат", use_container_width=True):
+            st.session_state.pop("messages", None)
+            st.session_state.pop("session_metrics", None)
+            st.rerun()
+
+
+if __name__ == "__main__" or True:
+    main()
