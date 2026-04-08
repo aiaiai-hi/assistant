@@ -730,7 +730,7 @@ def main():
     <div class="glossy-header">
         <img class="glossy-header-img" src="{GLOSSY_IMG_URL}" alt="Глосси"/>
         <div class="glossy-header-text">
-            <h1>Глосси</h1>
+            <h1>ГЛОССИ</h1>
             <p class="subtitle">ИИ-ассистент по Бизнес-Глоссарию</p>
             <p class="desc">Задайте вопрос — получите ответ из базы знаний</p>
         </div>
