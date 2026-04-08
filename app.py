@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-GitHub MVP v0.3: RAG + Supabase + системный промпт + статистика
+GitHub MVP v0.4
 """
 
 import streamlit as st
@@ -63,23 +63,15 @@ SYSTEM_PROMPT = """Ты — Глосси, дружелюбный ИИ-ассис
 - Если вопрос касается конкретного отчёта — мягко напомни что этой информации у тебя нет
 """
 
-WELCOME_MESSAGE = """Привет! 👋 Я — **Глосси**, ИИ-ассистент по работе с отчётами Банка в Бизнес-глоссарии.
+# Короткое приветствие — детали в «О Глосси»
+WELCOME_MESSAGE = """Привет! 👋 Я — **Глосси**, ИИ-ассистент по Бизнес-глоссарию.
 
-**Чем могу помочь:**
-1. Ответить на общие вопросы по отчётам и БГ
-2. Рассказать про типы запросов и отчётов
-3. Провести по процессу работы с отчётами — верхнеуровнево или пошагово
-4. Помочь разобраться с конкретным шагом или трудностью
+Задайте вопрос в строке ниже или выберите пример:
+> 💬 *Как определить, входит ли мой отчёт в отчётный ландшафт?*
+> 💬 *Что нужно чтобы зарегистрировать новый отчёт?*
+> 💬 *Проведи меня по процессу работы с отчётом*
 
-**Пока не умею:**
-— Давать информацию по конкретным отчётам
-— Генерировать атрибутный состав → раздел «Сформировать атрибуты»
-— Создавать карточки запросов
-
-Выбери вопрос или напиши свой:
-> 💬 «Как определить, входит ли мой отчёт в отчётный ландшафт?»
-> 💬 «Что нужно чтобы зарегистрировать новый отчёт?»
-> 💬 «Проведи меня по процессу работы с отчётом»
+ℹ️ Что я умею и не умею — во вкладке **«О Глосси»**
 """
 
 
@@ -119,8 +111,6 @@ def ask_qwen(messages: list, api_key: str) -> str:
 def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
     results   = vectorstore.similarity_search_with_score(question, k=k)
     docs, raw = zip(*results) if results else ([], [])
-
-    # float() чтобы избавиться от numpy.float32 — иначе Supabase не примет
     scores    = [round(float(1 / (1 + d)), 3) for d in raw]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
 
@@ -137,9 +127,9 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
             ),
         }
     ]
-    # последние 6 сообщений истории для контекста диалога
     for msg in st.session_state.messages[-6:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+        if msg["role"] in ("user", "assistant"):
+            messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": question})
 
     answer    = ask_qwen(messages, api_key)
@@ -155,7 +145,7 @@ def db_insert_log(question, answer, avg_score, no_answer, sources) -> int | None
         res = get_supabase().table("chat_logs").insert({
             "question" : question,
             "answer"   : answer,
-            "avg_score": float(avg_score),   # гарантируем python float
+            "avg_score": float(avg_score),
             "no_answer": no_answer,
             "feedback" : None,
             "sources"  : sources,
@@ -236,8 +226,8 @@ def inject_styles():
 
     .glossy-header {
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
-        border-radius: 16px; padding: 1.75rem 2.5rem 1.5rem;
-        margin-bottom: 1.25rem; color: white;
+        border-radius: 16px; padding: 1.5rem 2.5rem 1.25rem;
+        margin-bottom: 1rem; color: white;
         position: relative; overflow: hidden;
     }
     .glossy-header::before {
@@ -247,14 +237,14 @@ def inject_styles():
     .glossy-header h1 { margin: 0; font-size: 1.8rem; font-weight: 700; }
     .glossy-header p  { margin: 0.3rem 0 0; opacity: 0.85; font-size: 0.9rem; }
 
-    .metric-row { display: flex; gap: 0.7rem; margin-bottom: 1.1rem; flex-wrap: wrap; }
+    .metric-row { display: flex; gap: 0.7rem; margin-bottom: 1rem; flex-wrap: wrap; }
     .metric-card {
         background: white; border: 1px solid #d1fae5; border-radius: 12px;
-        padding: 0.7rem 1.1rem; flex: 1; min-width: 105px;
+        padding: 0.6rem 1rem; flex: 1; min-width: 100px;
         text-align: center; box-shadow: 0 1px 4px rgba(16,185,129,.07);
     }
-    .metric-card .val { font-size: 1.5rem; font-weight: 700; color: #065f46; line-height: 1.1; }
-    .metric-card .lbl { font-size: 0.7rem; color: #6b7280; margin-top: 0.15rem; }
+    .metric-card .val { font-size: 1.4rem; font-weight: 700; color: #065f46; line-height: 1.1; }
+    .metric-card .lbl { font-size: 0.68rem; color: #6b7280; margin-top: 0.15rem; }
 
     .score-bar-wrap { background: #e5e7eb; border-radius: 4px; height: 5px; margin-top: 3px; }
     .score-bar      { background: #10b981; border-radius: 4px; height: 5px; }
@@ -314,6 +304,7 @@ def render_assistant_message(content, log_id, avg_score=0.0,
                 )
                 st.caption(doc.page_content[:200] + "…")
 
+    # кнопки фидбека только для залогированных сообщений
     if log_id is None:
         return
 
@@ -322,7 +313,8 @@ def render_assistant_message(content, log_id, avg_score=0.0,
          if m.get("log_id") == log_id),
         None,
     )
-    c1, c2, _ = st.columns([1, 1, 8])
+    # широкие колонки чтобы текст влезал
+    c1, c2, _ = st.columns([2, 2, 6])
     with c1:
         lbl = "✅ Помогло" if cur_fb == "like" else "👍 Помогло"
         if st.button(lbl, key=f"like_{log_id}", use_container_width=True):
@@ -335,7 +327,7 @@ def render_assistant_message(content, log_id, avg_score=0.0,
             db_load_metrics.clear()
             st.rerun()
     with c2:
-        lbl = "❌ Нет" if cur_fb == "dislike" else "👎 Нет"
+        lbl = "❌ Не помогло" if cur_fb == "dislike" else "👎 Не помогло"
         if st.button(lbl, key=f"dis_{log_id}", use_container_width=True):
             db_update_feedback(log_id, "dislike")
             update_session_feedback(cur_fb, "dislike")
@@ -353,7 +345,11 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 def tab_chat(vectorstore, api_key):
     render_metrics_bar(st.session_state.session_metrics)
 
-    # история сообщений
+    # сначала chat_input — streamlit автоматически
+    # закрепляет его внизу страницы
+    question = st.chat_input("Задайте вопрос по Бизнес-Глоссарию…")
+
+    # потом история — она рендерится над полем ввода
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg["role"] == "assistant":
@@ -366,8 +362,8 @@ def tab_chat(vectorstore, api_key):
             else:
                 st.markdown(msg["content"])
 
-    # поле ввода — всегда внизу как у Claude
-    if question := st.chat_input("Задайте вопрос по Бизнес-Глоссарию…"):
+    # обрабатываем новый вопрос
+    if question:
         if not api_key:
             st.error("Нет API ключа.")
             return
@@ -386,7 +382,6 @@ def tab_chat(vectorstore, api_key):
                     answer = f"Ошибка: {e}"
                     docs, scores, avg_score, no_answer = [], [], 0.0, False
 
-            # sources — все float явно приводим
             sources_payload = [
                 {
                     "topic"  : d.metadata.get("topic", ""),
@@ -398,7 +393,7 @@ def tab_chat(vectorstore, api_key):
             ]
 
             log_id = db_insert_log(
-                question, answer, avg_score, no_answer, sources_payload
+                question, answer, float(avg_score), no_answer, sources_payload
             )
             update_session_metrics(no_answer, avg_score)
 
@@ -406,7 +401,7 @@ def tab_chat(vectorstore, api_key):
                 "role"     : "assistant",
                 "content"  : answer,
                 "log_id"   : log_id,
-                "avg_score": avg_score,
+                "avg_score": float(avg_score),
                 "no_answer": no_answer,
                 "feedback" : None,
             })
@@ -416,6 +411,7 @@ def tab_chat(vectorstore, api_key):
             )
             db_load_logs.clear()
             db_load_metrics.clear()
+            st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -423,15 +419,13 @@ def tab_chat(vectorstore, api_key):
 # ═══════════════════════════════════════════════════════════════
 def tab_about():
     st.markdown("## 🤖 О Глосси")
-
     st.markdown("""
-    **Глосси** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
-    Помогает разобраться в процессах управления отчётным ландшафтом,
-    отвечает на вопросы и проводит по шагам регистрации отчётов.
+**Глосси** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
+Помогает разобраться в процессах управления отчётным ландшафтом,
+отвечает на вопросы и проводит по шагам регистрации отчётов.
     """)
 
     st.markdown("---")
-
     col1, col2 = st.columns(2)
 
     with col1:
@@ -456,7 +450,6 @@ def tab_about():
 
     st.markdown("---")
     st.markdown("### 💬 Примеры вопросов")
-
     examples = [
         "Как определить, входит ли мой отчёт в отчётный ландшафт?",
         "Что нужно чтобы зарегистрировать новый отчёт?",
@@ -493,7 +486,6 @@ def tab_stats():
         st.info("Пока вопросов не было. Перейдите во вкладку «Чат» и задайте первый вопрос!")
         return
 
-    # сводные метрики
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Всего вопросов", total)
     c2.metric("👍 Помогло",     metrics["likes"],
@@ -506,7 +498,6 @@ def tab_stats():
 
     st.markdown("---")
 
-    # динамика score
     st.markdown("### 📈 Релевантность поиска по вопросам")
     if len(logs) >= 2:
         df_sc = pd.DataFrame({
@@ -519,24 +510,21 @@ def tab_stats():
 
     st.markdown("---")
 
-    # топ источников
     st.markdown("### 📄 Топ источников")
     all_sources = []
     for rec in logs:
         for src in (rec.get("sources") or []):
             label = src.get("topic") or src.get("file") or "—"
             all_sources.append(label)
-
     if all_sources:
         top    = Counter(all_sources).most_common(10)
         df_top = pd.DataFrame(top, columns=["Источник", "Раз использован"])
         st.dataframe(df_top, use_container_width=True, hide_index=True)
     else:
-        st.caption("Источники появятся после ответов с релевантными документами.")
+        st.caption("Источники появятся после первых ответов.")
 
     st.markdown("---")
 
-    # лента вопросов
     st.markdown("### 🗂️ Все вопросы")
     fb_filter = st.selectbox(
         "Фильтр по оценке:",
@@ -619,7 +607,6 @@ def main():
     except Exception as e:
         st.error(f"❌ Не удалось загрузить FAISS-индекс: {e}")
 
-    # три вкладки: чат главная, о глосси, статистика
     tab1, tab2, tab3 = st.tabs(["💬 Чат", "ℹ️ О Глосси", "📊 Статистика"])
 
     with tab1:
@@ -635,7 +622,7 @@ def main():
         tab_stats()
 
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.3")
+        st.markdown("### 🤖 Глосси v0.4")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
