@@ -438,7 +438,7 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 def page_chat(vectorstore, api_key):
     # приветственное сообщение
     with st.chat_message("assistant"):
-        st.markdown("Привет! 👋 Я — **Глосси**, ИИ-ассистент по Бизнес-глоссарию.")
+        st.markdown("Привет! 👋 Я — **ГЛОССИ**, ИИ-ассистент по Бизнес-глоссарию.")
         st.markdown("Задайте свой вопрос или выберите из самых частых:")
 
         # кнопки быстрых запросов — две колонки
