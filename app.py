@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-GitHub MVP v0.4
+GitHub MVP v0.5 — chat_input вне вкладок, всегда внизу страницы
 """
 
 import streamlit as st
@@ -63,7 +63,6 @@ SYSTEM_PROMPT = """Ты — Глосси, дружелюбный ИИ-ассис
 - Если вопрос касается конкретного отчёта — мягко напомни что этой информации у тебя нет
 """
 
-# Короткое приветствие — детали в «О Глосси»
 WELCOME_MESSAGE = """Привет! 👋 Я — **Глосси**, ИИ-ассистент по Бизнес-глоссарию.
 
 Задайте вопрос в строке ниже или выберите пример:
@@ -199,6 +198,9 @@ def init_state():
             "total": 0, "likes": 0, "dislikes": 0,
             "no_answer": 0, "_score_sum": 0.0, "avg_score": 0.0,
         }
+    # активная вкладка: "chat" | "about" | "stats"
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "chat"
 
 def update_session_metrics(no_answer: bool, avg_score: float):
     m = st.session_state.session_metrics
@@ -246,6 +248,18 @@ def inject_styles():
     .metric-card .val { font-size: 1.4rem; font-weight: 700; color: #065f46; line-height: 1.1; }
     .metric-card .lbl { font-size: 0.68rem; color: #6b7280; margin-top: 0.15rem; }
 
+    /* навигация-таблетки вместо st.tabs */
+    .tab-nav {
+        display: flex; gap: 0.5rem; margin-bottom: 1.25rem;
+    }
+    .tab-btn {
+        background: white; border: 1.5px solid #d1fae5; border-radius: 24px;
+        padding: 0.4rem 1.2rem; font-size: 0.88rem; color: #065f46;
+        cursor: pointer; font-weight: 500; transition: all .15s;
+    }
+    .tab-btn:hover  { background: #ecfdf5; }
+    .tab-btn.active { background: #10b981; color: white; border-color: #10b981; }
+
     .score-bar-wrap { background: #e5e7eb; border-radius: 4px; height: 5px; margin-top: 3px; }
     .score-bar      { background: #10b981; border-radius: 4px; height: 5px; }
 
@@ -261,7 +275,32 @@ def inject_styles():
 
 
 # ═══════════════════════════════════════════════════════════════
-# КОМПОНЕНТЫ
+# НАВИГАЦИЯ — кнопки-таблетки (вместо st.tabs)
+# ═══════════════════════════════════════════════════════════════
+def render_nav():
+    c1, c2, c3, _ = st.columns([1, 1, 1, 5])
+    with c1:
+        if st.button("💬 Чат",
+                     type="primary" if st.session_state.active_tab == "chat" else "secondary",
+                     use_container_width=True):
+            st.session_state.active_tab = "chat"
+            st.rerun()
+    with c2:
+        if st.button("ℹ️ О Глосси",
+                     type="primary" if st.session_state.active_tab == "about" else "secondary",
+                     use_container_width=True):
+            st.session_state.active_tab = "about"
+            st.rerun()
+    with c3:
+        if st.button("📊 Статистика",
+                     type="primary" if st.session_state.active_tab == "stats" else "secondary",
+                     use_container_width=True):
+            st.session_state.active_tab = "stats"
+            st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════
+# КОМПОНЕНТ — сообщение ассистента
 # ═══════════════════════════════════════════════════════════════
 def render_metrics_bar(m: dict):
     total = m["total"] or 1
@@ -304,7 +343,6 @@ def render_assistant_message(content, log_id, avg_score=0.0,
                 )
                 st.caption(doc.page_content[:200] + "…")
 
-    # кнопки фидбека только для залогированных сообщений
     if log_id is None:
         return
 
@@ -313,7 +351,6 @@ def render_assistant_message(content, log_id, avg_score=0.0,
          if m.get("log_id") == log_id),
         None,
     )
-    # широкие колонки чтобы текст влезал
     c1, c2, _ = st.columns([2, 2, 6])
     with c1:
         lbl = "✅ Помогло" if cur_fb == "like" else "👍 Помогло"
@@ -340,16 +377,12 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 
 
 # ═══════════════════════════════════════════════════════════════
-# ВКЛАДКА 1 — ЧАТ
+# СТРАНИЦА — ЧАТ
 # ═══════════════════════════════════════════════════════════════
-def tab_chat(vectorstore, api_key):
+def page_chat(vectorstore, api_key):
     render_metrics_bar(st.session_state.session_metrics)
 
-    # сначала chat_input — streamlit автоматически
-    # закрепляет его внизу страницы
-    question = st.chat_input("Задайте вопрос по Бизнес-Глоссарию…")
-
-    # потом история — она рендерится над полем ввода
+    # история сообщений
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg["role"] == "assistant":
@@ -362,62 +395,55 @@ def tab_chat(vectorstore, api_key):
             else:
                 st.markdown(msg["content"])
 
-    # обрабатываем новый вопрос
-    if question:
-        if not api_key:
-            st.error("Нет API ключа.")
-            return
 
-        st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.markdown(question)
+def process_question(question, vectorstore, api_key):
+    """Обрабатывает новый вопрос — вызывается из main вне вкладок."""
+    if not api_key:
+        st.error("Нет API ключа.")
+        return
 
-        with st.chat_message("assistant"):
-            with st.spinner("Глосси думает…"):
-                try:
-                    answer, docs, scores, avg_score, no_answer = rag_answer(
-                        question, vectorstore, api_key
-                    )
-                except Exception as e:
-                    answer = f"Ошибка: {e}"
-                    docs, scores, avg_score, no_answer = [], [], 0.0, False
+    st.session_state.messages.append({"role": "user", "content": question})
 
-            sources_payload = [
-                {
-                    "topic"  : d.metadata.get("topic", ""),
-                    "file"   : d.metadata.get("source_file", ""),
-                    "score"  : float(scores[i]) if i < len(scores) else None,
-                    "snippet": d.page_content[:150],
-                }
-                for i, d in enumerate(docs)
-            ]
-
-            log_id = db_insert_log(
-                question, answer, float(avg_score), no_answer, sources_payload
+    with st.spinner("Глосси думает…"):
+        try:
+            answer, docs, scores, avg_score, no_answer = rag_answer(
+                question, vectorstore, api_key
             )
-            update_session_metrics(no_answer, avg_score)
+        except Exception as e:
+            answer = f"Ошибка: {e}"
+            docs, scores, avg_score, no_answer = [], [], 0.0, False
 
-            st.session_state.messages.append({
-                "role"     : "assistant",
-                "content"  : answer,
-                "log_id"   : log_id,
-                "avg_score": float(avg_score),
-                "no_answer": no_answer,
-                "feedback" : None,
-            })
+    sources_payload = [
+        {
+            "topic"  : d.metadata.get("topic", ""),
+            "file"   : d.metadata.get("source_file", ""),
+            "score"  : float(scores[i]) if i < len(scores) else None,
+            "snippet": d.page_content[:150],
+        }
+        for i, d in enumerate(docs)
+    ]
 
-            render_assistant_message(
-                answer, log_id, avg_score, no_answer, docs, scores
-            )
-            db_load_logs.clear()
-            db_load_metrics.clear()
-            st.rerun()
+    log_id = db_insert_log(question, answer, float(avg_score), no_answer, sources_payload)
+    update_session_metrics(no_answer, avg_score)
+
+    st.session_state.messages.append({
+        "role"     : "assistant",
+        "content"  : answer,
+        "log_id"   : log_id,
+        "avg_score": float(avg_score),
+        "no_answer": no_answer,
+        "feedback" : None,
+    })
+
+    db_load_logs.clear()
+    db_load_metrics.clear()
+    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
-# ВКЛАДКА 2 — О ГЛОССИ
+# СТРАНИЦА — О ГЛОССИ
 # ═══════════════════════════════════════════════════════════════
-def tab_about():
+def page_about():
     st.markdown("## 🤖 О Глосси")
     st.markdown("""
 **Глосси** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
@@ -450,29 +476,27 @@ def tab_about():
 
     st.markdown("---")
     st.markdown("### 💬 Примеры вопросов")
-    examples = [
+    for ex in [
         "Как определить, входит ли мой отчёт в отчётный ландшафт?",
         "Что нужно чтобы зарегистрировать новый отчёт?",
         "Проведи меня по процессу работы с отчётом",
         "Какие бывают типы запросов в БГ?",
         "Что такое атрибутный состав отчёта?",
         "Как заполнить карточку запроса?",
-    ]
-    for ex in examples:
+    ]:
         st.markdown(f"> 💬 *{ex}*")
 
     st.markdown("---")
-    st.markdown("### 📞 Не нашли ответ?")
     st.info(
-        "Обратитесь к команде **Управления отчётным ландшафтом** "
+        "Не нашли ответ? Обратитесь к команде **Управления отчётным ландшафтом** "
         "или **Аналитики данных** — контакты в разделе «Контакты»."
     )
 
 
 # ═══════════════════════════════════════════════════════════════
-# ВКЛАДКА 3 — СТАТИСТИКА
+# СТРАНИЦА — СТАТИСТИКА
 # ═══════════════════════════════════════════════════════════════
-def tab_stats():
+def page_stats():
     import pandas as pd
     from collections import Counter
 
@@ -483,7 +507,7 @@ def tab_stats():
     total   = metrics["total"]
 
     if total == 0:
-        st.info("Пока вопросов не было. Перейдите во вкладку «Чат» и задайте первый вопрос!")
+        st.info("Пока вопросов не было. Перейдите в «Чат» и задайте первый вопрос!")
         return
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -497,7 +521,6 @@ def tab_stats():
     c5.metric("Avg retrieval",  metrics["avg_score"])
 
     st.markdown("---")
-
     st.markdown("### 📈 Релевантность поиска по вопросам")
     if len(logs) >= 2:
         df_sc = pd.DataFrame({
@@ -509,7 +532,6 @@ def tab_stats():
         st.caption("Нужно минимум 2 вопроса для графика.")
 
     st.markdown("---")
-
     st.markdown("### 📄 Топ источников")
     all_sources = []
     for rec in logs:
@@ -520,21 +542,16 @@ def tab_stats():
         top    = Counter(all_sources).most_common(10)
         df_top = pd.DataFrame(top, columns=["Источник", "Раз использован"])
         st.dataframe(df_top, use_container_width=True, hide_index=True)
-    else:
-        st.caption("Источники появятся после первых ответов.")
 
     st.markdown("---")
-
     st.markdown("### 🗂️ Все вопросы")
     fb_filter = st.selectbox(
         "Фильтр по оценке:",
         ["Все", "👍 Помогло", "👎 Не помогло", "Без оценки"],
         key="fb_filter",
     )
-    filter_map = {
-        "Все": None, "👍 Помогло": "like",
-        "👎 Не помогло": "dislike", "Без оценки": "none",
-    }
+    filter_map = {"Все": None, "👍 Помогло": "like",
+                  "👎 Не помогло": "dislike", "Без оценки": "none"}
     selected = filter_map[fb_filter]
 
     shown = 0
@@ -607,22 +624,32 @@ def main():
     except Exception as e:
         st.error(f"❌ Не удалось загрузить FAISS-индекс: {e}")
 
-    tab1, tab2, tab3 = st.tabs(["💬 Чат", "ℹ️ О Глосси", "📊 Статистика"])
+    # навигация кнопками — вне st.tabs, чтобы chat_input закрепился внизу
+    render_nav()
 
-    with tab1:
+    active = st.session_state.active_tab
+
+    if active == "chat":
         if vectorstore:
-            tab_chat(vectorstore, api_key)
+            page_chat(vectorstore, api_key)
         else:
             st.info("Индекс не загружен — убедитесь, что папка `faiss_index` рядом с `app.py`.")
 
-    with tab2:
-        tab_about()
+    elif active == "about":
+        page_about()
 
-    with tab3:
-        tab_stats()
+    elif active == "stats":
+        page_stats()
 
+    # ── chat_input ВНЕ любых контейнеров/вкладок — закрепляется внизу страницы ──
+    if active == "chat" and vectorstore:
+        question = st.chat_input("Задайте вопрос по Бизнес-Глоссарию…")
+        if question:
+            process_question(question, vectorstore, api_key)
+
+    # сайдбар
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.4")
+        st.markdown("### 🤖 Глосси v0.5")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
