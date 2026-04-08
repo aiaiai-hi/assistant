@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-GitHub MVP v0.2: RAG + Supabase логирование + системный промпт + статистика
+GitHub MVP v0.3: RAG + Supabase + системный промпт + статистика
 """
 
 import streamlit as st
@@ -95,9 +95,10 @@ def load_vectorstore():
 
 @st.cache_resource(show_spinner=False)
 def get_supabase() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_KEY"],
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -118,24 +119,27 @@ def ask_qwen(messages: list, api_key: str) -> str:
 def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
     results   = vectorstore.similarity_search_with_score(question, k=k)
     docs, raw = zip(*results) if results else ([], [])
-    scores    = [round(1 / (1 + d), 3) for d in raw]
+
+    # float() чтобы избавиться от numpy.float32 — иначе Supabase не примет
+    scores    = [round(float(1 / (1 + d)), 3) for d in raw]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
 
     context          = "\n\n---\n\n".join([d.page_content for d in docs])
     no_answer_marker = "ОТВЕТА_НЕТ"
 
-    # системный промпт + контекст + история + вопрос
     messages = [
         {
             "role"   : "system",
-            "content": SYSTEM_PROMPT + f"\n\n## Контекст из базы знаний\n{context}"
-                       + f"\n\nЕсли ответа в контексте нет — напиши ровно одно слово: {no_answer_marker}",
+            "content": (
+                SYSTEM_PROMPT
+                + f"\n\n## Контекст из базы знаний\n{context}"
+                + f"\n\nЕсли ответа в контексте нет — напиши ровно одно слово: {no_answer_marker}"
+            ),
         }
     ]
-    # добавляем последние 6 сообщений истории для контекста диалога
+    # последние 6 сообщений истории для контекста диалога
     for msg in st.session_state.messages[-6:]:
         messages.append({"role": msg["role"], "content": msg["content"]})
-    # текущий вопрос
     messages.append({"role": "user", "content": question})
 
     answer    = ask_qwen(messages, api_key)
@@ -144,16 +148,14 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SUPABASE — запись и обновление
+# SUPABASE
 # ═══════════════════════════════════════════════════════════════
 def db_insert_log(question, answer, avg_score, no_answer, sources) -> int | None:
-    """Вставляет запись в chat_logs, возвращает id."""
     try:
-        sb = get_supabase()
-        res = sb.table("chat_logs").insert({
+        res = get_supabase().table("chat_logs").insert({
             "question" : question,
             "answer"   : answer,
-            "avg_score": avg_score,
+            "avg_score": float(avg_score),   # гарантируем python float
             "no_answer": no_answer,
             "feedback" : None,
             "sources"  : sources,
@@ -173,7 +175,6 @@ def db_update_feedback(row_id: int, feedback: str):
 
 @st.cache_data(ttl=30, show_spinner=False)
 def db_load_logs():
-    """Загружает все логи из Supabase (кэш 30 сек)."""
     try:
         res = get_supabase().table("chat_logs") \
             .select("*").order("created_at").execute()
@@ -183,16 +184,14 @@ def db_load_logs():
 
 @st.cache_data(ttl=30, show_spinner=False)
 def db_load_metrics():
-    """Считает метрики прямо из БД."""
     logs  = db_load_logs()
     total = len(logs)
     if total == 0:
-        return {"total": 0, "likes": 0, "dislikes": 0,
-                "no_answer": 0, "avg_score": 0.0}
+        return {"total": 0, "likes": 0, "dislikes": 0, "no_answer": 0, "avg_score": 0.0}
     likes    = sum(1 for r in logs if r["feedback"] == "like")
     dislikes = sum(1 for r in logs if r["feedback"] == "dislike")
     no_ans   = sum(1 for r in logs if r["no_answer"])
-    avg_sc   = round(sum(r["avg_score"] or 0 for r in logs) / total, 3)
+    avg_sc   = round(sum(float(r["avg_score"] or 0) for r in logs) / total, 3)
     return {"total": total, "likes": likes, "dislikes": dislikes,
             "no_answer": no_ans, "avg_score": avg_sc}
 
@@ -202,7 +201,6 @@ def db_load_metrics():
 # ═══════════════════════════════════════════════════════════════
 def init_state():
     if "messages" not in st.session_state:
-        # приветственное сообщение сразу в истории
         st.session_state.messages = [
             {"role": "assistant", "content": WELCOME_MESSAGE, "log_id": None}
         ]
@@ -214,17 +212,17 @@ def init_state():
 
 def update_session_metrics(no_answer: bool, avg_score: float):
     m = st.session_state.session_metrics
-    m["total"]    += 1
+    m["total"]      += 1
     m["_score_sum"] += avg_score
-    m["avg_score"]  = round(m["_score_sum"] / m["total"], 3)
+    m["avg_score"]   = round(m["_score_sum"] / m["total"], 3)
     if no_answer:
         m["no_answer"] += 1
 
 def update_session_feedback(old_fb, new_fb):
     m = st.session_state.session_metrics
-    if old_fb == "like":    m["likes"]    = max(0, m["likes"] - 1)
+    if old_fb == "like":      m["likes"]    = max(0, m["likes"] - 1)
     elif old_fb == "dislike": m["dislikes"] = max(0, m["dislikes"] - 1)
-    if new_fb == "like":    m["likes"]    += 1
+    if new_fb == "like":      m["likes"]    += 1
     elif new_fb == "dislike": m["dislikes"] += 1
 
 
@@ -290,7 +288,8 @@ def render_metrics_bar(m: dict):
     """, unsafe_allow_html=True)
 
 
-def render_assistant_message(content, log_id, avg_score=0.0, no_answer=False, docs=None, scores=None):
+def render_assistant_message(content, log_id, avg_score=0.0,
+                              no_answer=False, docs=None, scores=None):
     st.markdown(content)
 
     if no_answer:
@@ -315,13 +314,13 @@ def render_assistant_message(content, log_id, avg_score=0.0, no_answer=False, do
                 )
                 st.caption(doc.page_content[:200] + "…")
 
-    # кнопки фидбека — только для залогированных сообщений
     if log_id is None:
         return
 
     cur_fb = next(
         (m["feedback"] for m in st.session_state.messages
-         if m.get("log_id") == log_id), None
+         if m.get("log_id") == log_id),
+        None,
     )
     c1, c2, _ = st.columns([1, 1, 8])
     with c1:
@@ -329,7 +328,6 @@ def render_assistant_message(content, log_id, avg_score=0.0, no_answer=False, do
         if st.button(lbl, key=f"like_{log_id}", use_container_width=True):
             db_update_feedback(log_id, "like")
             update_session_feedback(cur_fb, "like")
-            # обновляем в истории
             for m in st.session_state.messages:
                 if m.get("log_id") == log_id:
                     m["feedback"] = "like"
@@ -350,11 +348,12 @@ def render_assistant_message(content, log_id, avg_score=0.0, no_answer=False, do
 
 
 # ═══════════════════════════════════════════════════════════════
-# ВКЛАДКА — ЧАТ
+# ВКЛАДКА 1 — ЧАТ
 # ═══════════════════════════════════════════════════════════════
 def tab_chat(vectorstore, api_key):
     render_metrics_bar(st.session_state.session_metrics)
 
+    # история сообщений
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg["role"] == "assistant":
@@ -367,6 +366,7 @@ def tab_chat(vectorstore, api_key):
             else:
                 st.markdown(msg["content"])
 
+    # поле ввода — всегда внизу как у Claude
     if question := st.chat_input("Задайте вопрос по Бизнес-Глоссарию…"):
         if not api_key:
             st.error("Нет API ключа.")
@@ -386,17 +386,20 @@ def tab_chat(vectorstore, api_key):
                     answer = f"Ошибка: {e}"
                     docs, scores, avg_score, no_answer = [], [], 0.0, False
 
+            # sources — все float явно приводим
             sources_payload = [
                 {
                     "topic"  : d.metadata.get("topic", ""),
                     "file"   : d.metadata.get("source_file", ""),
-                    "score"  : scores[i] if i < len(scores) else None,
+                    "score"  : float(scores[i]) if i < len(scores) else None,
                     "snippet": d.page_content[:150],
                 }
                 for i, d in enumerate(docs)
             ]
 
-            log_id = db_insert_log(question, answer, avg_score, no_answer, sources_payload)
+            log_id = db_insert_log(
+                question, answer, avg_score, no_answer, sources_payload
+            )
             update_session_metrics(no_answer, avg_score)
 
             st.session_state.messages.append({
@@ -408,13 +411,73 @@ def tab_chat(vectorstore, api_key):
                 "feedback" : None,
             })
 
-            render_assistant_message(answer, log_id, avg_score, no_answer, docs, scores)
+            render_assistant_message(
+                answer, log_id, avg_score, no_answer, docs, scores
+            )
             db_load_logs.clear()
             db_load_metrics.clear()
 
 
 # ═══════════════════════════════════════════════════════════════
-# ВКЛАДКА — СТАТИСТИКА
+# ВКЛАДКА 2 — О ГЛОССИ
+# ═══════════════════════════════════════════════════════════════
+def tab_about():
+    st.markdown("## 🤖 О Глосси")
+
+    st.markdown("""
+    **Глосси** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
+    Помогает разобраться в процессах управления отчётным ландшафтом,
+    отвечает на вопросы и проводит по шагам регистрации отчётов.
+    """)
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### ✅ Что умею")
+        st.markdown("""
+1. Отвечать на общие вопросы по отчётам и БГ
+2. Рассказать про типы запросов и отчётов
+3. Провести по процессу верхнеуровнево или пошагово
+4. Объяснить конкретный шаг подробно
+5. Помочь разобраться с трудностями при описании в БГ
+6. Отвечать на вопросы по управлению отчётным ландшафтом
+        """)
+
+    with col2:
+        st.markdown("### ❌ Что пока не умею")
+        st.markdown("""
+- Давать информацию по конкретным отчётам
+- Генерировать атрибутный состав
+  → раздел **«Сформировать атрибуты»**
+- Создавать карточки запросов
+        """)
+
+    st.markdown("---")
+    st.markdown("### 💬 Примеры вопросов")
+
+    examples = [
+        "Как определить, входит ли мой отчёт в отчётный ландшафт?",
+        "Что нужно чтобы зарегистрировать новый отчёт?",
+        "Проведи меня по процессу работы с отчётом",
+        "Какие бывают типы запросов в БГ?",
+        "Что такое атрибутный состав отчёта?",
+        "Как заполнить карточку запроса?",
+    ]
+    for ex in examples:
+        st.markdown(f"> 💬 *{ex}*")
+
+    st.markdown("---")
+    st.markdown("### 📞 Не нашли ответ?")
+    st.info(
+        "Обратитесь к команде **Управления отчётным ландшафтом** "
+        "или **Аналитики данных** — контакты в разделе «Контакты»."
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
+# ВКЛАДКА 3 — СТАТИСТИКА
 # ═══════════════════════════════════════════════════════════════
 def tab_stats():
     import pandas as pd
@@ -432,14 +495,14 @@ def tab_stats():
 
     # сводные метрики
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Всего вопросов",  total)
-    c2.metric("👍 Помогло",      metrics["likes"],
+    c1.metric("Всего вопросов", total)
+    c2.metric("👍 Помогло",     metrics["likes"],
               f"{round(metrics['likes']/total*100)}%")
-    c3.metric("👎 Не помогло",   metrics["dislikes"],
+    c3.metric("👎 Не помогло",  metrics["dislikes"],
               f"{round(metrics['dislikes']/total*100)}%")
-    c4.metric("⚠️ «Не знаю»",   metrics["no_answer"],
+    c4.metric("⚠️ «Не знаю»",  metrics["no_answer"],
               f"{round(metrics['no_answer']/total*100)}%")
-    c5.metric("Avg retrieval",   metrics["avg_score"])
+    c5.metric("Avg retrieval",  metrics["avg_score"])
 
     st.markdown("---")
 
@@ -448,7 +511,7 @@ def tab_stats():
     if len(logs) >= 2:
         df_sc = pd.DataFrame({
             "№"    : range(1, len(logs) + 1),
-            "Score": [r["avg_score"] or 0 for r in logs],
+            "Score": [float(r["avg_score"] or 0) for r in logs],
         }).set_index("№")
         st.line_chart(df_sc)
     else:
@@ -468,25 +531,29 @@ def tab_stats():
         top    = Counter(all_sources).most_common(10)
         df_top = pd.DataFrame(top, columns=["Источник", "Раз использован"])
         st.dataframe(df_top, use_container_width=True, hide_index=True)
+    else:
+        st.caption("Источники появятся после ответов с релевантными документами.")
 
     st.markdown("---")
 
     # лента вопросов
     st.markdown("### 🗂️ Все вопросы")
     fb_filter = st.selectbox(
-        "Фильтр:",
+        "Фильтр по оценке:",
         ["Все", "👍 Помогло", "👎 Не помогло", "Без оценки"],
         key="fb_filter",
     )
-    filter_map = {"Все": None, "👍 Помогло": "like",
-                  "👎 Не помогло": "dislike", "Без оценки": "none"}
+    filter_map = {
+        "Все": None, "👍 Помогло": "like",
+        "👎 Не помогло": "dislike", "Без оценки": "none",
+    }
     selected = filter_map[fb_filter]
 
     shown = 0
     for rec in reversed(logs):
         fb = rec["feedback"]
-        if selected == "none"              and fb is not None:   continue
-        if selected in ("like","dislike")  and fb != selected:  continue
+        if selected == "none"             and fb is not None:  continue
+        if selected in ("like","dislike") and fb != selected:  continue
 
         fb_html = (
             '<span class="fb-like">👍 Помогло</span>'       if fb == "like"    else
@@ -494,10 +561,10 @@ def tab_stats():
             '<span class="fb-none">— без оценки</span>'
         )
         no_tag = ' · <span style="color:#f59e0b">⚠️ «Не знаю»</span>' if rec["no_answer"] else ""
-        ts     = rec.get("created_at", "")[:16].replace("T", " ")
+        ts     = (rec.get("created_at") or "")[:16].replace("T", " ")
 
         with st.expander(
-            f"#{rec['id']}  {ts}  ·  score {rec['avg_score']:.2f}",
+            f"#{rec['id']}  {ts}  ·  score {float(rec['avg_score'] or 0):.2f}",
             expanded=False,
         ):
             st.markdown(f"**Вопрос:** {rec['question']}")
@@ -552,7 +619,8 @@ def main():
     except Exception as e:
         st.error(f"❌ Не удалось загрузить FAISS-индекс: {e}")
 
-    tab1, tab2 = st.tabs(["💬 Чат", "📊 Статистика"])
+    # три вкладки: чат главная, о глосси, статистика
+    tab1, tab2, tab3 = st.tabs(["💬 Чат", "ℹ️ О Глосси", "📊 Статистика"])
 
     with tab1:
         if vectorstore:
@@ -561,10 +629,13 @@ def main():
             st.info("Индекс не загружен — убедитесь, что папка `faiss_index` рядом с `app.py`.")
 
     with tab2:
+        tab_about()
+
+    with tab3:
         tab_stats()
 
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.2")
+        st.markdown("### 🤖 Глосси v0.3")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
