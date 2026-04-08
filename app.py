@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-GitHub MVP v0.5 — chat_input вне вкладок, всегда внизу страницы
+GitHub MVP v0.6 — фикс скролла + кнопка Статистика
 """
 
 import streamlit as st
@@ -198,9 +198,11 @@ def init_state():
             "total": 0, "likes": 0, "dislikes": 0,
             "no_answer": 0, "_score_sum": 0.0, "avg_score": 0.0,
         }
-    # активная вкладка: "chat" | "about" | "stats"
     if "active_tab" not in st.session_state:
         st.session_state.active_tab = "chat"
+    # флаг — только что получен новый ответ, нужно скроллить к вопросу
+    if "scroll_to_last_question" not in st.session_state:
+        st.session_state.scroll_to_last_question = False
 
 def update_session_metrics(no_answer: bool, avg_score: float):
     m = st.session_state.session_metrics
@@ -248,18 +250,6 @@ def inject_styles():
     .metric-card .val { font-size: 1.4rem; font-weight: 700; color: #065f46; line-height: 1.1; }
     .metric-card .lbl { font-size: 0.68rem; color: #6b7280; margin-top: 0.15rem; }
 
-    /* навигация-таблетки вместо st.tabs */
-    .tab-nav {
-        display: flex; gap: 0.5rem; margin-bottom: 1.25rem;
-    }
-    .tab-btn {
-        background: white; border: 1.5px solid #d1fae5; border-radius: 24px;
-        padding: 0.4rem 1.2rem; font-size: 0.88rem; color: #065f46;
-        cursor: pointer; font-weight: 500; transition: all .15s;
-    }
-    .tab-btn:hover  { background: #ecfdf5; }
-    .tab-btn.active { background: #10b981; color: white; border-color: #10b981; }
-
     .score-bar-wrap { background: #e5e7eb; border-radius: 4px; height: 5px; margin-top: 3px; }
     .score-bar      { background: #10b981; border-radius: 4px; height: 5px; }
 
@@ -270,15 +260,37 @@ def inject_styles():
     .fb-like    { color: #10b981; font-weight: 600; }
     .fb-dislike { color: #ef4444; font-weight: 600; }
     .fb-none    { color: #d1d5db; }
+
+    /* якорь для скролла */
+    #last-question { scroll-margin-top: 80px; }
     </style>
     """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# НАВИГАЦИЯ — кнопки-таблетки (вместо st.tabs)
+# СКРОЛЛ к последнему вопросу через JS
+# ═══════════════════════════════════════════════════════════════
+def scroll_to_last_question():
+    """Скроллит страницу к якорю #last-question через JS."""
+    st.components.v1.html("""
+    <script>
+        // небольшая задержка чтобы DOM успел отрисоваться
+        setTimeout(function() {
+            const el = window.parent.document.getElementById('last-question');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 300);
+    </script>
+    """, height=0)
+
+
+# ═══════════════════════════════════════════════════════════════
+# НАВИГАЦИЯ
 # ═══════════════════════════════════════════════════════════════
 def render_nav():
-    c1, c2, c3, _ = st.columns([1, 1, 1, 5])
+    # даём кнопке «Статистика» чуть больше места — колонки [1, 1, 1.4, 4]
+    c1, c2, c3, _ = st.columns([1, 1, 1.4, 4])
     with c1:
         if st.button("💬 Чат",
                      type="primary" if st.session_state.active_tab == "chat" else "secondary",
@@ -300,7 +312,7 @@ def render_nav():
 
 
 # ═══════════════════════════════════════════════════════════════
-# КОМПОНЕНТ — сообщение ассистента
+# КОМПОНЕНТЫ
 # ═══════════════════════════════════════════════════════════════
 def render_metrics_bar(m: dict):
     total = m["total"] or 1
@@ -382,8 +394,17 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 def page_chat(vectorstore, api_key):
     render_metrics_bar(st.session_state.session_metrics)
 
-    # история сообщений
-    for msg in st.session_state.messages:
+    # определяем индекс последнего вопроса пользователя для якоря
+    last_user_idx = None
+    for idx, msg in enumerate(st.session_state.messages):
+        if msg["role"] == "user":
+            last_user_idx = idx
+
+    for idx, msg in enumerate(st.session_state.messages):
+        # ставим якорь перед последним вопросом пользователя
+        if idx == last_user_idx and st.session_state.scroll_to_last_question:
+            st.markdown('<div id="last-question"></div>', unsafe_allow_html=True)
+
         with st.chat_message(msg["role"]):
             if msg["role"] == "assistant":
                 render_assistant_message(
@@ -395,9 +416,14 @@ def page_chat(vectorstore, api_key):
             else:
                 st.markdown(msg["content"])
 
+    # если только что получили ответ — скроллим к вопросу и сбрасываем флаг
+    if st.session_state.scroll_to_last_question:
+        scroll_to_last_question()
+        st.session_state.scroll_to_last_question = False
+
 
 def process_question(question, vectorstore, api_key):
-    """Обрабатывает новый вопрос — вызывается из main вне вкладок."""
+    """Обрабатывает новый вопрос."""
     if not api_key:
         st.error("Нет API ключа.")
         return
@@ -437,6 +463,9 @@ def process_question(question, vectorstore, api_key):
 
     db_load_logs.clear()
     db_load_metrics.clear()
+
+    # устанавливаем флаг — при следующем рендере скроллим к вопросу
+    st.session_state.scroll_to_last_question = True
     st.rerun()
 
 
@@ -624,7 +653,6 @@ def main():
     except Exception as e:
         st.error(f"❌ Не удалось загрузить FAISS-индекс: {e}")
 
-    # навигация кнопками — вне st.tabs, чтобы chat_input закрепился внизу
     render_nav()
 
     active = st.session_state.active_tab
@@ -634,22 +662,19 @@ def main():
             page_chat(vectorstore, api_key)
         else:
             st.info("Индекс не загружен — убедитесь, что папка `faiss_index` рядом с `app.py`.")
-
     elif active == "about":
         page_about()
-
     elif active == "stats":
         page_stats()
 
-    # ── chat_input ВНЕ любых контейнеров/вкладок — закрепляется внизу страницы ──
+    # chat_input вне любых контейнеров — закрепляется внизу страницы
     if active == "chat" and vectorstore:
         question = st.chat_input("Задайте вопрос по Бизнес-Глоссарию…")
         if question:
             process_question(question, vectorstore, api_key)
 
-    # сайдбар
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.5")
+        st.markdown("### 🤖 Глосси v0.6")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
@@ -659,6 +684,7 @@ def main():
         if st.button("🗑️ Очистить чат", use_container_width=True):
             st.session_state.pop("messages", None)
             st.session_state.pop("session_metrics", None)
+            st.session_state.pop("scroll_to_last_question", None)
             st.rerun()
 
 
