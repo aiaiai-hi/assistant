@@ -229,16 +229,23 @@ def inject_styles():
     /* хедер с картинкой */
     .glossy-header {
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
-        border-radius: 16px; padding: 1.25rem 2rem;
-        margin-bottom: 1rem; color: white;
-        display: flex; align-items: center; gap: 1.5rem;
-        position: relative; overflow: hidden;
+        border-radius: 16px; padding: 0 2rem 0 0;
+        margin-top: 0.5rem; margin-bottom: 1rem; color: white;
+        display: flex; align-items: flex-end; gap: 1.5rem;
+        position: relative; overflow: hidden; min-height: 120px;
     }
-    .glossy-header-text h1 { margin: 0; font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
-    .glossy-header-text p  { margin: 0.25rem 0 0; opacity: 0.85; font-size: 0.88rem; }
+    .glossy-header-text {
+        padding: 1.25rem 0 1.25rem 0;
+        display: flex; flex-direction: column; justify-content: flex-end;
+    }
+    .glossy-header-text h1 { margin: 0; font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+    .glossy-header-text .subtitle { margin: 0.1rem 0 0; opacity: 0.9; font-size: 0.82rem; font-weight: 600; }
+    .glossy-header-text .desc    { margin: 0.15rem 0 0; opacity: 0.75; font-size: 0.8rem; }
     .glossy-header-img {
-        width: 110px; height: 110px; object-fit: contain;
-        flex-shrink: 0; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+        width: auto; height: 130px; object-fit: contain;
+        flex-shrink: 0;
+        mix-blend-mode: multiply;
+        align-self: flex-end;
     }
 
     .metric-row { display: flex; gap: 0.7rem; margin-bottom: 1rem; flex-wrap: wrap; }
@@ -639,7 +646,8 @@ def main():
         <img class="glossy-header-img" src="data:image/jpeg;base64,{GLOSSY_IMG_B64}" alt="Глосси"/>
         <div class="glossy-header-text">
             <h1>Глосси</h1>
-            <p>ИИ-ассистент по Бизнес-Глоссарию · задайте вопрос — получите ответ из базы знаний</p>
+            <p class="subtitle">ИИ-ассистент по Бизнес-Глоссарию</p>
+            <p class="desc">Задайте вопрос — получите ответ из базы знаний</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -676,7 +684,7 @@ def main():
             process_question(question, vectorstore, api_key)
 
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.8")
+        st.markdown("### 🤖 Глосси v8")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
