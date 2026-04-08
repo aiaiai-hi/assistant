@@ -20,7 +20,7 @@ API_BASE_URL = "https://api.vsellm.ru/v1"
 TOP_K        = 4
 
 # Картинка из репозитория
-GLOSSY_IMG_URL = "https://github.com/aiaiai-hi/assistant/blob/main/assets/glossy.png"
+GLOSSY_IMG_URL = "https://raw.githubusercontent.com/aiaiai-hi/assistant/main/assets/glossy.png"
 
 # Быстрые запросы — отображаются кнопками
 QUICK_QUESTIONS = [
