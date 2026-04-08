@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-GitHub MVP v0.6 — фикс скролла + кнопка Статистика
+GitHub MVP v0.7
 """
 
 import streamlit as st
@@ -65,10 +65,13 @@ SYSTEM_PROMPT = """Ты — Глосси, дружелюбный ИИ-ассис
 
 WELCOME_MESSAGE = """Привет! 👋 Я — **Глосси**, ИИ-ассистент по Бизнес-глоссарию.
 
-Задайте вопрос в строке ниже или выберите пример:
-> 💬 *Как определить, входит ли мой отчёт в отчётный ландшафт?*
-> 💬 *Что нужно чтобы зарегистрировать новый отчёт?*
-> 💬 *Проведи меня по процессу работы с отчётом*
+Задайте свой вопрос или выберите из самых частых запросов:
+💬 Как определить, входит ли мой отчёт в отчётный ландшафт?
+💬 Что нужно чтобы зарегистрировать новый отчёт?
+💬 Проведи меня по процессу работы с отчётом
+💬 Какие бывают типы запросов в БГ?
+💬 Что такое атрибутный состав отчёта?
+💬 Как заполнить карточку запроса?
 
 ℹ️ Что я умею и не умею — во вкладке **«О Глосси»**
 """
@@ -200,7 +203,6 @@ def init_state():
         }
     if "active_tab" not in st.session_state:
         st.session_state.active_tab = "chat"
-    # флаг — только что получен новый ответ, нужно скроллить к вопросу
     if "scroll_to_last_question" not in st.session_state:
         st.session_state.scroll_to_last_question = False
 
@@ -226,7 +228,13 @@ def update_session_feedback(old_fb, new_fb):
 def inject_styles():
     st.markdown("""
     <style>
+    /* убираем белую полосу сверху — отступы Streamlit */
+    .stApp > header { display: none; }
     .stApp { background: #f0fdf8; }
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
 
     .glossy-header {
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
@@ -261,25 +269,20 @@ def inject_styles():
     .fb-dislike { color: #ef4444; font-weight: 600; }
     .fb-none    { color: #d1d5db; }
 
-    /* якорь для скролла */
     #last-question { scroll-margin-top: 80px; }
     </style>
     """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# СКРОЛЛ к последнему вопросу через JS
+# СКРОЛЛ
 # ═══════════════════════════════════════════════════════════════
 def scroll_to_last_question():
-    """Скроллит страницу к якорю #last-question через JS."""
     st.components.v1.html("""
     <script>
-        // небольшая задержка чтобы DOM успел отрисоваться
         setTimeout(function() {
             const el = window.parent.document.getElementById('last-question');
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
         }, 300);
     </script>
     """, height=0)
@@ -289,7 +292,6 @@ def scroll_to_last_question():
 # НАВИГАЦИЯ
 # ═══════════════════════════════════════════════════════════════
 def render_nav():
-    # даём кнопке «Статистика» чуть больше места — колонки [1, 1, 1.4, 4]
     c1, c2, c3, _ = st.columns([1, 1, 1.4, 4])
     with c1:
         if st.button("💬 Чат",
@@ -315,6 +317,7 @@ def render_nav():
 # КОМПОНЕНТЫ
 # ═══════════════════════════════════════════════════════════════
 def render_metrics_bar(m: dict):
+    """Полоска метрик — используется только на странице Статистика."""
     total = m["total"] or 1
     lk_p  = round(m["likes"]     / total * 100)
     no_p  = round(m["no_answer"] / total * 100)
@@ -389,19 +392,16 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 
 
 # ═══════════════════════════════════════════════════════════════
-# СТРАНИЦА — ЧАТ
+# СТРАНИЦА — ЧАТ (без метрик)
 # ═══════════════════════════════════════════════════════════════
 def page_chat(vectorstore, api_key):
-    render_metrics_bar(st.session_state.session_metrics)
-
-    # определяем индекс последнего вопроса пользователя для якоря
+    # метрики убраны — только история сообщений
     last_user_idx = None
     for idx, msg in enumerate(st.session_state.messages):
         if msg["role"] == "user":
             last_user_idx = idx
 
     for idx, msg in enumerate(st.session_state.messages):
-        # ставим якорь перед последним вопросом пользователя
         if idx == last_user_idx and st.session_state.scroll_to_last_question:
             st.markdown('<div id="last-question"></div>', unsafe_allow_html=True)
 
@@ -416,14 +416,12 @@ def page_chat(vectorstore, api_key):
             else:
                 st.markdown(msg["content"])
 
-    # если только что получили ответ — скроллим к вопросу и сбрасываем флаг
     if st.session_state.scroll_to_last_question:
         scroll_to_last_question()
         st.session_state.scroll_to_last_question = False
 
 
 def process_question(question, vectorstore, api_key):
-    """Обрабатывает новый вопрос."""
     if not api_key:
         st.error("Нет API ключа.")
         return
@@ -463,8 +461,6 @@ def process_question(question, vectorstore, api_key):
 
     db_load_logs.clear()
     db_load_metrics.clear()
-
-    # устанавливаем флаг — при следующем рендере скроллим к вопросу
     st.session_state.scroll_to_last_question = True
     st.rerun()
 
@@ -504,7 +500,7 @@ def page_about():
         """)
 
     st.markdown("---")
-    st.markdown("### 💬 Примеры вопросов")
+    st.markdown("### 💬 Частые вопросы")
     for ex in [
         "Как определить, входит ли мой отчёт в отчётный ландшафт?",
         "Что нужно чтобы зарегистрировать новый отчёт?",
@@ -523,7 +519,7 @@ def page_about():
 
 
 # ═══════════════════════════════════════════════════════════════
-# СТРАНИЦА — СТАТИСТИКА
+# СТРАНИЦА — СТАТИСТИКА (метрики здесь)
 # ═══════════════════════════════════════════════════════════════
 def page_stats():
     import pandas as pd
@@ -535,6 +531,11 @@ def page_stats():
     metrics = db_load_metrics()
     total   = metrics["total"]
 
+    # метрики текущей сессии сверху
+    st.markdown("### Текущая сессия")
+    render_metrics_bar(st.session_state.session_metrics)
+
+    st.markdown("### Все сессии (из БД)")
     if total == 0:
         st.info("Пока вопросов не было. Перейдите в «Чат» и задайте первый вопрос!")
         return
@@ -667,14 +668,13 @@ def main():
     elif active == "stats":
         page_stats()
 
-    # chat_input вне любых контейнеров — закрепляется внизу страницы
     if active == "chat" and vectorstore:
         question = st.chat_input("Задайте вопрос по Бизнес-Глоссарию…")
         if question:
             process_question(question, vectorstore, api_key)
 
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v0.6")
+        st.markdown("### 🤖 Глосси v0.7")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
