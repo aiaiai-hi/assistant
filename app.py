@@ -261,7 +261,7 @@ def inject_styles():
     .glossy-header {
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
         border-radius: 16px; padding: 0 2rem 0 0;
-        margin-top: 0.5rem; margin-bottom: 1rem; color: white;
+        margin-top: 2rem; margin-bottom: 1rem; color: white;
         display: flex; align-items: flex-end; gap: 1.5rem;
         position: relative; overflow: hidden; min-height: 120px;
     }
