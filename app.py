@@ -262,11 +262,11 @@ def inject_styles():
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
         border-radius: 16px; padding: 0 2rem 0 0;
         margin-top: 2rem; margin-bottom: 1rem; color: white;
-        display: flex; align-items: flex-end; gap: 1.5rem;
+        display: flex; align-items: flex-end; gap: 0.5rem;
         position: relative; overflow: hidden; min-height: 120px;
     }
     .glossy-header-text {
-        padding: 1.25rem 0 1.25rem 0;
+         padding: 0.5rem 0 1.25rem 0;
         display: flex; flex-direction: column; justify-content: flex-end;
     }
     .glossy-header-text h1   { margin: 0; font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
