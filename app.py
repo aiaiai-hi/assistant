@@ -14,7 +14,7 @@ from datetime import datetime
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
 MODEL_NAME   = "qwen/qwen3-vl-30b-a3b-instruct"
-EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBED_MODEL  = "sentence-transformers/intfloat/multilingual-e5-large"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
 TOP_K        = 4
