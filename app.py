@@ -575,7 +575,7 @@ def page_chat(vectorstore, api_key):
     if st.session_state.pending_question:
         q = st.session_state.pending_question
         st.session_state.pending_question = None
-        answer, docs, scores, avg_score, no_answer, next_step, topic, latency = rag_answer(...)
+        process_question(q, vectorstore, api_key)
 
 
 def process_question(question, vectorstore, api_key):
@@ -592,12 +592,12 @@ def process_question(question, vectorstore, api_key):
     with st.chat_message("assistant"):
         with st.spinner("Глосси думает…"):
             try:
-                answer, docs, scores, avg_score, no_answer, next_step, topic = rag_answer(
+                answer, docs, scores, avg_score, no_answer, next_step, topic, latency = rag_answer(
                     question, vectorstore, api_key
                 )
             except Exception as e:
                 answer    = f"Ошибка: {e}"
-                docs, scores, avg_score, no_answer, next_step, topic = [], [], 0.0, False, False, "Другое"
+                docs, scores, avg_score, no_answer, next_step, topic, latency = [], [], 0.0, False, False, "Другое", 0.0
 
         # Рендерим ответ сразу внутри chat_message("assistant")
         render_assistant_message(
