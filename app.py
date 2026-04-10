@@ -126,13 +126,14 @@ def get_supabase() -> Client:
 # ═══════════════════════════════════════════════════════════════
 # LLM
 # ═══════════════════════════════════════════════════════════════
-def ask_qwen(messages: list, api_key: str) -> str:
+import time
+
+def ask_qwen(messages: list, api_key: str) -> tuple[str, float]:
     client = openai.OpenAI(
         api_key=api_key,
         base_url=API_BASE_URL,
         timeout=90,
     )
-    # Добавляем /no_think в последнее сообщение пользователя
     patched = []
     for m in messages:
         if m["role"] == "user":
@@ -140,16 +141,18 @@ def ask_qwen(messages: list, api_key: str) -> str:
         else:
             patched.append(m)
 
+    start = time.time()
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=patched,
         max_tokens=4096,
     )
+    latency = round(time.time() - start, 1)
+
     text = response.choices[0].message.content or ""
-    # Подстраховка
     if "</think>" in text:
         text = text.split("</think>")[-1].strip()
-    return text
+    return text, latency
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -248,7 +251,7 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
             messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": question})
  
-    answer = ask_qwen(messages, api_key)
+    answer, latency = ask_qwen(messages, api_key)
     no_answer = no_answer_marker.lower() in answer.lower()
  
     # Детектируем пошаговый режим
@@ -262,7 +265,7 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
             topic = line.replace("🏷️ Тема:", "").strip()
             break
  
-    return answer_clean, list(docs_sorted), scores_sorted, avg_score, no_answer, next_step_available, topic
+    return answer_clean, list(docs_sorted), scores_sorted, avg_score, no_answer, next_step_available, topic, latency
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -583,7 +586,7 @@ def page_chat(vectorstore, api_key):
     if st.session_state.pending_question:
         q = st.session_state.pending_question
         st.session_state.pending_question = None
-        process_question(q, vectorstore, api_key)
+        answer, docs, scores, avg_score, no_answer, next_step, topic, latency = rag_answer(...)
 
 
 def process_question(question, vectorstore, api_key):
@@ -614,6 +617,8 @@ def process_question(question, vectorstore, api_key):
             avg_score = float(avg_score),
             no_answer = no_answer,
             next_step = next_step,
+            if latency:
+                st.caption(f"⏱️ {latency} сек"),
         )
 
     sources_payload = [
@@ -638,6 +643,7 @@ def process_question(question, vectorstore, api_key):
         "next_step" : next_step,
         "topic"     : topic,
         "feedback"  : None,
+        "latency": latency,
     })
 
     if next_step:
