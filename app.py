@@ -13,7 +13,7 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
-MODEL_NAME   = "deepseek/deepseek-chat-v3-0324"
+MODEL_NAME   = "deepseek/deepseek-v3.2"
 EMBED_MODEL  = "intfloat/multilingual-e5-large"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
@@ -142,6 +142,7 @@ def ask_qwen(messages: list, api_key: str) -> tuple[str, float]:
     )
     latency = round(time.time() - start, 1)
     text = response.choices[0].message.content or ""
+    return text, latency
 
 
 # ═══════════════════════════════════════════════════════════════
