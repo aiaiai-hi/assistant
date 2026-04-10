@@ -1,6 +1,6 @@
 """
 Глосси — ИИ-ассистент по Бизнес-Глоссарию
-v10: уточнение типа отчёта/запроса, три уровня детализации, убрана подсказка шагового режима
+v9: кнопки быстрых запросов, пошаговый режим, квалификация тематики
 """
 
 import streamlit as st
@@ -13,95 +13,73 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
-MODEL_NAME   = "deepseek/deepseek-v3.2"
-EMBED_MODEL  = "intfloat/multilingual-e5-large"
+MODEL_NAME   = "qwen/qwen3-vl-30b-a3b-instruct"
+EMBED_MODEL  = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
-TOP_K        = 10
+TOP_K        = 4
 
 # Картинка из репозитория
 GLOSSY_IMG_URL = "https://raw.githubusercontent.com/aiaiai-hi/assistant/main/assets/glossy.png"
-# ── Добавить в секцию КОНФИГ рядом с GLOSSY_IMG_URL ──────────
-GLOSSY_VIDEO_URL = "https://raw.githubusercontent.com/aiaiai-hi/assistant/main/assets/glossy_intro.mp4"
 
 # Быстрые запросы — отображаются кнопками
 QUICK_QUESTIONS = [
-    "Какие бывают виды запросов в БГ?",
-    "Как зарегистрировать новый отчёт?",
-    "Как автоматизировать отчёт?",
-    "Что такое атрибутный состав?",
-    "Как подобрать термин к атрибуту?",
-    "Проведи меня по процессу шаг за шагом",
+    "Как определить, входит ли мой отчёт в отчётный ландшафт?",
+    "Что нужно чтобы зарегистрировать новый отчёт?",
+    "Проведи меня по процессу работы с отчётом",
+    "Какие бывают типы запросов в БГ?",
+    "Что такое атрибутный состав отчёта?",
+    "Как заполнить карточку запроса?",
 ]
 
-SYSTEM_PROMPT = """Ты — Глосси, ИИ-ассистент по работе с отчётами в Бизнес-Глоссарии (БГ) Банка.
- 
-## ГЛАВНОЕ ПРАВИЛО
-Отвечай СТРОГО на основе фрагментов из базы знаний (раздел «Контекст» ниже).
-- НЕ добавляй шаги, поля, кнопки или детали, которых НЕТ в контексте.
-- НЕ перефразируй названия элементов интерфейса: если в контексте «нажать кнопку Создать» — пиши именно так.
-- Если ответа в контексте нет — честно скажи об этом.
- 
+SYSTEM_PROMPT = """Ты — Глосси, дружелюбный ИИ-ассистент по работе с отчётами Банка в Бизнес-глоссарии (БГ).
+
 ## Твоя личность
-- Общаешься тепло, профессионально, без лишней воды.
-- Если вопрос неоднозначный — уточняешь, не угадываешь.
- 
+- Общаешься тепло, профессионально, без лишней воды
+- Если вопрос неоднозначный — уточняешь, не угадываешь
+- Если чего-то не знаешь — честно говоришь об этом
+
 ## Квалификация запроса
-В начале каждого ответа ОБЯЗАТЕЛЬНО определи тематику одной строкой:
+В начале каждого ответа ОБЯЗАТЕЛЬНО определи тематику запроса одной строкой в формате:
 `🏷️ Тема: [название темы]`
-Темы: Регистрация отчёта | Актуализация | Исключение отчёта | Смена владельца | Автоматизация | Атрибутный состав | Навигация и поиск | Реестр отчётов | Общие вопросы | Другое
- 
-## УТОЧНЕНИЕ ТИПА ЗАПРОСА
- 
-Если пользователь спрашивает КАК СДЕЛАТЬ что-то в БГ — проверь, указан ли тип запроса в сообщении.
- 
-Слова-триггеры (НЕ переспрашивай):
-- «новый отчёт», «зарегистрировать», «создать отчёт» → Регистрация нового отчёта
-- «актуализировать», «обновить отчёт», «изменить отчёт» → Актуализация
-- «автоматизировать», «BIQ», «бизнес-инициатива» → Автоматизация
-- «исключить», «удалить отчёт» → Исключение
-- «сменить владельца» → Смена владельца
- 
-Уточняй ТОЛЬКО если тип реально не ясен (например: «как создать запрос» — непонятно какой).
- 
-## РАБОТА С ПОШАГОВЫМИ ИНСТРУКЦИЯМИ
- 
-### КРИТИЧЕСКИ ВАЖНО: соблюдай порядок шагов
-Фрагменты в контексте содержат поля `step_number` и `process_name`.
-- Когда описываешь процесс — выводи шаги СТРОГО В ПОРЯДКЕ step_number (1, 2, 3…).
-- НЕ пропускай шаги, даже если они кажутся очевидными.
-- НЕ объединяй шаги, если они разделены в контексте.
-- Если фрагмент с step_number=0 — это обзор процесса, используй его для общего ответа.
- 
-### Три уровня детализации
-Когда пользователь просит объяснить процесс — спроси уровень:
- 
-«Как вам удобнее?
-📋 **Кратко** — все этапы одним списком
-📝 **По шагам** — краткое описание каждого шага
-🔍 **Детально** — разбираем каждый шаг подробно, по одному»
- 
-**📋 Кратко:** Перечисли все этапы нумерованным списком. На каждый — 1 строка. Только из контекста.
- 
-**📝 По шагам:** Для каждого шага: название + 2–4 ключевых действия. Всё сразу. Используй ТОЛЬКО шаги из контекста.
- 
-**🔍 Детально:** Выдавай ОДИН шаг за раз. Воспроизводи содержимое из контекста ДОСЛОВНО. Нумеруй: «Шаг 1 из N». В конце добавь: `[NEXT_STEP_AVAILABLE]`. На «следующий»/«дальше»/«далее» — выдай следующий шаг.
- 
+Возможные темы: Регистрация отчёта | Актуализация | Атрибутный состав | Типы запросов | Процесс работы | Общие вопросы | Другое
+
 ## Что ты умеешь
-1. Отвечать на вопросы по работе с отчётами в БГ
-2. Объяснять типы запросов и типы отчётов
-3. Проводить по процессу на выбранном уровне детализации
-4. Объяснять заполнение полей, карточки запроса, атрибутного состава
-5. Подсказать, где найти реестр отчётов (БГ или платформа УОЛ)
- 
-## Что ты НЕ умеешь
-- Давать информацию по конкретным отчётам подразделений
-- Генерировать атрибутный состав (→ раздел «Сформировать атрибуты» на платформе УОЛ)
-- Создавать карточки запросов в системе
- 
-## Если ответа нет в контексте
-Скажи: «У меня нет информации по этому вопросу в базе знаний. Обратитесь к команде Управления отчётным ландшафтом или Аналитики данных — контакты в разделе «Контакты».»
-Не придумывай ответ.
+1. Отвечать на общие вопросы по отчётам и Бизнес-глоссарию
+2. Рассказать какие бывают типы запросов и отчётов
+3. Провести по процессу работы с отчётами — верхнеуровнево или пошагово
+4. Показать конкретные шаги по запросу
+5. Провести по каждому шагу с подробным описанием каждого действия
+6. Отвечать на вопросы в рамках управления отчётным ландшафтом
+
+## Что ты НЕ умеешь (говори об этом прямо)
+- Давать информацию по конкретным отчётам
+- Генерировать атрибутный состав (направляй пользователя в раздел «Сформировать атрибуты»)
+- Создавать карточки запросов
+
+## Как определить сценарий пользователя
+Перед ответом мысленно определи кто перед тобой и адаптируй стиль:
+- 🆕 Новичок — первый раз в БГ, нужна общая ориентация
+- 🎯 Задача — есть конкретное изменение которое нужно внести в БГ
+- 🤔 Сомнения — не уверен нужна ли регистрация или какие действия предпринять
+- 🔄 Опытный — работает с БГ, но есть конкретный вопрос
+- 😟 Трудности — не может что-то описать в БГ, нужна помощь
+- 🔍 Информация — хочет узнать детали по своему отчёту
+
+## Сценарий «Проведи меня по процессу» — ПОШАГОВЫЙ РЕЖИМ
+Если пользователь просит провести по сценарию или хочет подробное описание шагов:
+1. Сначала уточни: «Как вам удобнее? 1️⃣ Верхнеуровнево  2️⃣ Подробно по шагам»
+2. Если выбрал «подробно» или «по шагам» — выдавай ТОЛЬКО ОДИН ШАГ за раз
+3. В конце каждого шага обязательно добавь строку: `[NEXT_STEP_AVAILABLE]`
+4. Если пользователь написал «следующий», «дальше», «далее», «next» — выдай следующий шаг
+5. Нумеруй шаги: «Шаг 1 из N:», «Шаг 2 из N:» и т.д.
+
+## Правила ответа
+- Отвечай ТОЛЬКО на основе контекста из базы знаний ниже
+- Если ответа в контексте нет — скажи: «У меня нет информации по этому вопросу в базе знаний. Обратитесь к команде Управления отчётным ландшафтом или Аналитики данных — контакты в разделе «Контакты».»
+- Не придумывай факты, названия отчётов и цифры
+- Структурируй длинные ответы с нумерацией или эмодзи
+- Если вопрос касается конкретного отчёта — мягко напомни что этой информации у тебя нет
 """
 
 
@@ -126,108 +104,30 @@ def get_supabase() -> Client:
 # ═══════════════════════════════════════════════════════════════
 # LLM
 # ═══════════════════════════════════════════════════════════════
-import time
-
-def ask_qwen(messages: list, api_key: str) -> tuple[str, float]:
-    client = openai.OpenAI(
-        api_key=api_key,
-        base_url=API_BASE_URL,
-        timeout=90,
-    )
-    start = time.time()
+def ask_qwen(messages: list, api_key: str) -> str:
+    client = openai.OpenAI(api_key=api_key, base_url=API_BASE_URL)
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
-        max_tokens=4096,
     )
-    latency = round(time.time() - start, 1)
-    text = response.choices[0].message.content or ""
+    return response.choices[0].message.content
 
 
 # ═══════════════════════════════════════════════════════════════
 # RAG
 # ═══════════════════════════════════════════════════════════════
-
-# Маппинг триггеров → process_type для точного поиска
-PROCESS_TRIGGERS = {
-    "регистрац": "Регистрация нового отчёта",
-    "новый отчёт": "Регистрация нового отчёта",
-    "новый отчет": "Регистрация нового отчёта",
-    "актуализ": "Актуализация отчёта",
-    "исключ": "Исключение отчёта",
-    "удал": "Исключение отчёта",
-    "смен": "Смена владельца отчёта",
-    "владел": "Смена владельца отчёта",
-    "автоматиз": "Автоматизация отчёта",
-    "атрибут": "Атрибутный состав",
-    "АС ": "Атрибутный состав",
-}
-
-def detect_process_type(text: str) -> str | None:
-    """Определяет process_type по тексту запроса."""
-    text_lower = text.lower()
-    for trigger, ptype in PROCESS_TRIGGERS.items():
-        if trigger.lower() in text_lower:
-            return ptype
-    return None
-
 def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
-    """RAG-ответ с сортировкой чанков по step_number и нумерацией фрагментов."""
- 
-    # Определяем тип процесса для расширения поиска
-    process_type = detect_process_type(question)
- 
-    # Основной поиск по вопросу
-    results = vectorstore.similarity_search_with_score(question, k=k)
- 
-    # Если определили тип процесса — добавляем целевой поиск
-    if process_type:
-        extra_queries = [
-            f"шаги процесса {process_type} создание карточки запроса",
-            f"{process_type} черновик редактировать местоположение сохранить отправить",
-        ]
-        seen = {r[0].page_content for r in results}
-        for eq in extra_queries:
-            extra = vectorstore.similarity_search_with_score(eq, k=k)
-            for doc, score in extra:
-                if doc.page_content not in seen:
-                    results.append((doc, score))
-                    seen.add(doc.page_content)
-        # Берём топ-k по score (меньше = лучше в FAISS L2)
-        results = sorted(results, key=lambda x: x[1])[:k]
- 
+    results   = vectorstore.similarity_search_with_score(question, k=k)
     docs, raw = zip(*results) if results else ([], [])
-    scores = [round(float(1 / (1 + d)), 3) for d in raw]
+    scores    = [round(float(1 / (1 + d)), 3) for d in raw]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
- 
-    # ─── КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: сортировка по step_number ───
-    # Собираем (doc, score) и сортируем: сначала по process_name, потом по step_number
-    doc_score_pairs = list(zip(docs, scores))
-    doc_score_pairs.sort(key=lambda pair: (
-        pair[0].metadata.get("process_name", ""),
-        pair[0].metadata.get("step_number", 99),
-    ))
-    docs_sorted = [p[0] for p in doc_score_pairs]
-    scores_sorted = [p[1] for p in doc_score_pairs]
- 
-    # ─── КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: нумерованный контекст с metadata ───
-    context_parts = []
-    for i, doc in enumerate(docs_sorted, 1):
-        meta = doc.metadata
-        header = f"[Фрагмент {i}"
-        if meta.get("process_name"):
-            header += f" — {meta['process_name']}"
-        if meta.get("step_number") and meta["step_number"] > 0:
-            header += f", шаг {meta['step_number']}"
-        header += "]"
-        context_parts.append(f"{header}\n{doc.page_content}")
- 
-    context = "\n\n---\n\n".join(context_parts)
+
+    context          = "\n\n---\n\n".join([d.page_content for d in docs])
     no_answer_marker = "ОТВЕТА_НЕТ"
- 
+
     messages = [
         {
-            "role": "system",
+            "role"   : "system",
             "content": (
                 SYSTEM_PROMPT
                 + f"\n\n## Контекст из базы знаний\n{context}"
@@ -239,14 +139,14 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
         if msg["role"] in ("user", "assistant"):
             messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": question})
- 
-    answer, latency = ask_qwen(messages, api_key)
+
+    answer    = ask_qwen(messages, api_key)
     no_answer = no_answer_marker.lower() in answer.lower()
- 
+
     # Детектируем пошаговый режим
     next_step_available = "[NEXT_STEP_AVAILABLE]" in answer
     answer_clean = answer.replace("[NEXT_STEP_AVAILABLE]", "").strip()
- 
+
     # Извлекаем тему
     topic = "Другое"
     for line in answer_clean.split("\n"):
@@ -254,7 +154,7 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
             topic = line.replace("🏷️ Тема:", "").strip()
             break
 
-    return answer_clean, list(docs_sorted), scores_sorted, avg_score, no_answer, next_step_available, topic, latency
+    return answer_clean, list(docs), scores, avg_score, no_answer, next_step_available, topic
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -361,12 +261,12 @@ def inject_styles():
     .glossy-header {
         background: linear-gradient(135deg, #065f46 0%, #10b981 60%, #34d399 100%);
         border-radius: 16px; padding: 0 2rem 0 0;
-        margin-top: 0.5rem; margin-bottom: 1rem; color: white;
-        display: flex; align-items: flex-end; gap: 1.5rem;
+        margin-top: 2rem; margin-bottom: 1rem; color: white;
+        display: flex; align-items: flex-end; gap: 0rem;
         position: relative; overflow: hidden; min-height: 120px;
     }
     .glossy-header-text {
-        padding: 1.25rem 0 1.25rem 0;
+         padding: 0.5rem 0 1.25rem 0;
         display: flex; flex-direction: column; justify-content: flex-end;
     }
     .glossy-header-text h1   { margin: 0; font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
@@ -468,8 +368,14 @@ def render_assistant_message(content, log_id, avg_score=0.0,
             unsafe_allow_html=True,
         )
 
-    # кнопки пошагового режима — без текстовой подсказки
+    # подсказка пошагового режима
     if next_step:
+        st.markdown(
+            '<div class="step-box">➡️ Чтобы перейти к следующему шагу — нажмите кнопку ниже '
+            'или напишите <b>«следующий»</b></div>',
+            unsafe_allow_html=True,
+        )
+        # кнопки навигации по шагам
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             if st.button("▶ Следующий шаг", key=f"next_{log_id}", use_container_width=True):
@@ -532,7 +438,7 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 def page_chat(vectorstore, api_key):
     # приветственное сообщение
     with st.chat_message("assistant"):
-        st.markdown("Привет! 👋 Я — **Глосси**, ИИ-ассистент по Бизнес-глоссарию.")
+        st.markdown("Привет! 👋 Я — **ГЛОССИ**, ИИ-ассистент по Бизнес-глоссарию.")
         st.markdown("Задайте свой вопрос или выберите из самых частых:")
 
         # кнопки быстрых запросов — две колонки
@@ -583,32 +489,16 @@ def process_question(question, vectorstore, api_key):
         st.error("Нет API ключа.")
         return
 
-    # Сразу добавляем вопрос в историю и показываем его
     st.session_state.messages.append({"role": "user", "content": question})
-    with st.chat_message("user"):
-        st.markdown(question)
 
-    # Теперь думаем и показываем ответ
-    with st.chat_message("assistant"):
-        with st.spinner("Глосси думает…"):
-            try:
-                answer, docs, scores, avg_score, no_answer, next_step, topic, latency = rag_answer(
-                    question, vectorstore, api_key
-                )
-            except Exception as e:
-                answer    = f"Ошибка: {e}"
-                docs, scores, avg_score, no_answer, next_step, topic, latency = [], [], 0.0, False, False, "Другое", 0.0
-
-        # Рендерим ответ сразу внутри chat_message("assistant")
-        render_assistant_message(
-            content   = answer,
-            log_id    = None,
-            avg_score = float(avg_score),
-            no_answer = no_answer,
-            next_step = next_step,
-        )
-        if latency:
-            st.caption(f"⏱️ {latency} сек")
+    with st.spinner("Глосси думает…"):
+        try:
+            answer, docs, scores, avg_score, no_answer, next_step, topic = rag_answer(
+                question, vectorstore, api_key
+            )
+        except Exception as e:
+            answer    = f"Ошибка: {e}"
+            docs, scores, avg_score, no_answer, next_step, topic = [], [], 0.0, False, False, "Другое"
 
     sources_payload = [
         {
@@ -632,54 +522,33 @@ def process_question(question, vectorstore, api_key):
         "next_step" : next_step,
         "topic"     : topic,
         "feedback"  : None,
-        "latency": latency,
     })
 
+    # если включён пошаговый режим — запоминаем
     if next_step:
         st.session_state.next_step_mode = True
     else:
         st.session_state.next_step_mode = False
 
     db_load_logs.clear(); db_load_metrics.clear()
+    st.session_state.scroll_to_last_question = True
     st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════
-# СТРАНИЦА — О ГЛОССИ (заменяет старую page_about целиком)
+# СТРАНИЦА — О ГЛОССИ
 # ═══════════════════════════════════════════════════════════════
 def page_about():
     st.markdown("## 🤖 О Глосси")
- 
-    # ── Видео-представление ──
     st.markdown("""
-    <div style="
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    ">
-        <video
-            width="100%"
-            controls
-            controlsList="nodownload"
-            poster="https://raw.githubusercontent.com/aiaiai-hi/assistant/main/assets/glossy_intro.mp4"
-            style="display: block; border-radius: 12px;"
-        >
-            <source src="{video_url}" type="video/mp4">
-            Ваш браузер не поддерживает воспроизведение видео.
-        </video>
-    </div>
-    """.format(video_url=GLOSSY_VIDEO_URL), unsafe_allow_html=True)
- 
-    st.markdown("""
-**Глосси** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
+**ГЛОССИ** — ИИ-ассистент по работе с Бизнес-глоссарием Банка.
 Помогает разобраться в процессах управления отчётным ландшафтом,
 отвечает на вопросы и проводит по шагам регистрации отчётов.
     """)
- 
+
     st.markdown("---")
     col1, col2 = st.columns(2)
- 
+
     with col1:
         st.markdown("### ✅ Что умею")
         st.markdown("""
@@ -690,7 +559,7 @@ def page_about():
 5. Помочь разобраться с трудностями при описании в БГ
 6. Отвечать на вопросы по управлению отчётным ландшафтом
         """)
- 
+
     with col2:
         st.markdown("### ❌ Что пока не умею")
         st.markdown("""
@@ -699,18 +568,17 @@ def page_about():
   → раздел **«Сформировать атрибуты»**
 - Создавать карточки запросов
         """)
- 
+
     st.markdown("---")
     st.markdown("### 💬 Частые вопросы")
     for ex in QUICK_QUESTIONS:
         st.markdown(f"> 💬 *{ex}*")
- 
+
     st.markdown("---")
     st.info(
         "Не нашли ответ? Обратитесь к команде **Управления отчётным ландшафтом** "
         "или **Аналитики данных** — контакты в разделе «Контакты»."
     )
- 
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -862,7 +730,7 @@ def main():
     <div class="glossy-header">
         <img class="glossy-header-img" src="{GLOSSY_IMG_URL}" alt="Глосси"/>
         <div class="glossy-header-text">
-            <h1>Глосси</h1>
+            <h1>ГЛОССИ</h1>
             <p class="subtitle">ИИ-ассистент по Бизнес-Глоссарию</p>
             <p class="desc">Задайте вопрос — получите ответ из базы знаний</p>
         </div>
@@ -902,7 +770,7 @@ def main():
             process_question(question, vectorstore, api_key)
 
     with st.sidebar:
-        st.markdown("### 🤖 Глосси v10")
+        st.markdown("### 🤖 Глосси v9")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
