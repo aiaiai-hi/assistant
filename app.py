@@ -134,24 +134,14 @@ def ask_qwen(messages: list, api_key: str) -> tuple[str, float]:
         base_url=API_BASE_URL,
         timeout=90,
     )
-    patched = []
-    for m in messages:
-        if m["role"] == "user":
-            patched.append({"role": "user", "content": "/no_think " + m["content"]})
-        else:
-            patched.append(m)
-
     start = time.time()
     response = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=patched,
+        messages=messages,
         max_tokens=4096,
     )
     latency = round(time.time() - start, 1)
-
     text = response.choices[0].message.content or ""
-    if "</think>" in text:
-        text = text.split("</think>")[-1].strip()
     return text, latency
 
 
