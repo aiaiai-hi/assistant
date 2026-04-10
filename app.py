@@ -127,12 +127,22 @@ def get_supabase() -> Client:
 # LLM
 # ═══════════════════════════════════════════════════════════════
 def ask_qwen(messages: list, api_key: str) -> str:
-    client = openai.OpenAI(api_key=api_key, base_url=API_BASE_URL)
+    client = openai.OpenAI(
+        api_key=api_key,
+        base_url=API_BASE_URL,
+        timeout=60,
+    )
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
+        max_tokens=4096,
+        extra_body={"enable_thinking": False},
     )
-    return response.choices[0].message.content
+    text = response.choices[0].message.content
+    # Подстраховка: если thinking всё равно пришёл
+    if "</think>" in text:
+        text = text.split("</think>")[-1].strip()
+    return text
 
 
 # ═══════════════════════════════════════════════════════════════
