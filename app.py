@@ -130,16 +130,23 @@ def ask_qwen(messages: list, api_key: str) -> str:
     client = openai.OpenAI(
         api_key=api_key,
         base_url=API_BASE_URL,
-        timeout=60,
+        timeout=90,
     )
+    # Добавляем /no_think в последнее сообщение пользователя
+    patched = []
+    for m in messages:
+        if m["role"] == "user":
+            patched.append({"role": "user", "content": "/no_think " + m["content"]})
+        else:
+            patched.append(m)
+
     response = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=messages,
+        messages=patched,
         max_tokens=4096,
-        extra_body={"enable_thinking": False},
     )
-    text = response.choices[0].message.content
-    # Подстраховка: если thinking всё равно пришёл
+    text = response.choices[0].message.content or ""
+    # Подстраховка
     if "</think>" in text:
         text = text.split("</think>")[-1].strip()
     return text
