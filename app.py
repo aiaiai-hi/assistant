@@ -13,7 +13,7 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
-MODEL_NAME   = "qwen/qwen3-vl-8b-instruct"
+MODEL_NAME   = "qwen/qwen3-vl-30b-a3b-instruct"
 EMBED_MODEL  = "intfloat/multilingual-e5-large"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
