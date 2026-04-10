@@ -13,7 +13,7 @@ from datetime import datetime
 # ═══════════════════════════════════════════════════════════════
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
-MODEL_NAME   = "deepseek/deepseek-v3.2"
+MODEL_NAME   = "deepseek/deepseek-chat-v3-0324"
 EMBED_MODEL  = "intfloat/multilingual-e5-large"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
