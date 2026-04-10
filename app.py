@@ -612,15 +612,14 @@ def process_question(question, vectorstore, api_key):
 
         # Рендерим ответ сразу внутри chat_message("assistant")
         render_assistant_message(
-            content = answer,
-            log_id = None,   # log_id ещё не известен, лайки появятся после rerun
+            content   = answer,
+            log_id    = None,
             avg_score = float(avg_score),
             no_answer = no_answer,
             next_step = next_step,
-        if latency:
-                st.caption(f"⏱️ {latency} сек"),
-            
         )
+        if latency:
+            st.caption(f"⏱️ {latency} сек")
 
     sources_payload = [
         {
