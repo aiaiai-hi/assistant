@@ -253,8 +253,8 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
         if "🏷️ Тема:" in line:
             topic = line.replace("🏷️ Тема:", "").strip()
             break
- 
-        return answer_clean, list(docs_sorted), scores_sorted, avg_score, no_answer, next_step_available, topic, latency
+
+    return answer_clean, list(docs_sorted), scores_sorted, avg_score, no_answer, next_step_available, topic, latency
 
 
 # ═══════════════════════════════════════════════════════════════
