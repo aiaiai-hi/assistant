@@ -597,7 +597,8 @@ def process_question(question, vectorstore, api_key):
                     question, vectorstore, api_key
                 )
             except Exception as e:
-                answer    = f"Ошибка: {e}"
+                import traceback
+                answer = f"Ошибка: {type(e).__name__}: {e}\n\n```\n{traceback.format_exc()}\n```"
                 docs, scores, avg_score, no_answer, next_step, topic, latency = [], [], 0.0, False, False, "Другое", 0.0
 
         # Рендерим ответ сразу внутри chat_message("assistant")
