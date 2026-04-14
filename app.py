@@ -412,45 +412,61 @@ def inject_styles():
 
     #last-question { scroll-margin-top: 80px; }
 
-    /* ── карточки шагов ── */
-    .step-card {
-        background: white;
+    /* ── оформление ответов бота ── */
+
+    /* нумерованный список — красивые шаги */
+    [data-testid="stChatMessage"] ol {
+        counter-reset: step-counter;
+        list-style: none;
+        padding-left: 0;
+        margin: 0.5rem 0;
+    }
+    [data-testid="stChatMessage"] ol li {
+        counter-increment: step-counter;
+        position: relative;
+        padding: 8px 12px 8px 44px;
+        margin-bottom: 6px;
+        background: #f0fdf8;
         border: 1px solid #d1fae5;
         border-left: 3px solid #10b981;
-        border-radius: 0 10px 10px 0;
-        padding: 10px 14px;
-        margin: 6px 0;
+        border-radius: 0 8px 8px 0;
+        font-size: 0.88rem;
+        line-height: 1.6;
     }
-    .step-card-title {
-        font-weight: 600;
-        font-size: 0.9rem;
+    [data-testid="stChatMessage"] ol li::before {
+        content: counter(step-counter);
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #10b981;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    /* жирный текст в li — название шага */
+    [data-testid="stChatMessage"] ol li strong {
         color: #065f46;
-        margin-bottom: 5px;
     }
-    .step-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
-    .step-badge {
-        font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 20px;
-        font-weight: 500;
+
+    /* маркированный список */
+    [data-testid="stChatMessage"] ul li {
+        padding: 3px 0;
+        font-size: 0.88rem;
+        line-height: 1.6;
     }
-    .badge-role { background: #d1fae5; color: #065f46; }
-    .badge-loc  { background: #e0f2fe; color: #0369a1; }
-    .badge-dur  { background: #fef3c7; color: #92400e; }
-    .badge-part { background: #f3e8ff; color: #6b21a8; }
-    .step-summary { font-size: 0.82rem; color: #374151; line-height: 1.5; }
-    .step-screenshot {
-        margin-top: 8px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .step-screenshot img { width: 100%; display: block; }
-    .step-screenshot-cap {
-        font-size: 11px;
+
+    /* тема в начале ответа */
+    [data-testid="stChatMessage"] p:first-child {
+        font-size: 0.8rem;
         color: #6b7280;
-        padding: 4px 8px;
-        background: #f9fafb;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -499,69 +515,10 @@ def render_nav():
 # КОМПОНЕНТЫ
 # ═══════════════════════════════════════════════════════════════
 
-def render_step_cards(docs, answer_text=""):
-    """Рендерит карточки только для чанков, чья тема упомянута в ответе бота."""
-    if not docs:
-        return
-
-    seen = set()
-    cards_html = []
-
-    for doc in docs:
-        m = doc.metadata
-        topic = (m.get("topic") or "").strip()
-        if not topic or topic in seen:
-            continue
-
-        # Показываем карточку только если тема или её часть упоминается в ответе
-        topic_words = [w for w in topic.split("—") if len(w.strip()) > 3]
-        mentioned = any(w.strip().lower() in answer_text.lower() for w in topic_words)
-        if not mentioned:
-            continue
-
-        seen.add(topic)
-
-        source = m.get("source", m.get("source_file", ""))
-        screenshot_url = m.get("screenshot_url", "")
-
-        badge = f'<span class="step-badge badge-part">{source}</span>' if source else ""
-
-        screenshot_html = ""
-        if screenshot_url:
-            screenshot_html = (
-                f'<div class="step-screenshot">'
-                f'<img src="{screenshot_url}" alt="{topic}"/>'
-                f'<div class="step-screenshot-cap">{topic}</div>'
-                f'</div>'
-            )
-
-        cards_html.append(
-            f'<div class="step-card">'
-            f'<div class="step-card-title">&#9881;&#65039; {topic}</div>'
-            f'<div class="step-badges">{badge}</div>'
-            f'{screenshot_html}'
-            f'</div>'
-        )
-
-    if cards_html:
-        st.markdown(
-            '<div style="margin-top:8px">' + "".join(cards_html) + "</div>",
-            unsafe_allow_html=True,
-        )
-
-
 def render_assistant_message(content, log_id, avg_score=0.0,
                               no_answer=False, docs=None, scores=None,
                               next_step=False):
     st.markdown(content)
-
-    # Карточки шагов из RAG-контекста
-    render_step_cards(docs, answer_text=content)
-
-    # ── временный отладчик — удали после проверки ──
-    if docs:
-        with st.expander("🔧 debug: метаданные первого doc", expanded=False):
-            st.json(docs[0].metadata)
 
     if no_answer:
         st.markdown(
