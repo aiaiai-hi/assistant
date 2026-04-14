@@ -499,11 +499,8 @@ def render_nav():
 # КОМПОНЕНТЫ
 # ═══════════════════════════════════════════════════════════════
 
-def render_step_cards(docs):
-    """Рендерит карточки из RAG-документов.
-    Работает с метаданными: topic, chunk_id, keywords, source.
-    Показывает уникальные карточки (по topic).
-    """
+def render_step_cards(docs, answer_text=""):
+    """Рендерит карточки только для чанков, чья тема упомянута в ответе бота."""
     if not docs:
         return
 
@@ -515,16 +512,19 @@ def render_step_cards(docs):
         topic = (m.get("topic") or "").strip()
         if not topic or topic in seen:
             continue
+
+        # Показываем карточку только если тема или её часть упоминается в ответе
+        topic_words = [w for w in topic.split("—") if len(w.strip()) > 3]
+        mentioned = any(w.strip().lower() in answer_text.lower() for w in topic_words)
+        if not mentioned:
+            continue
+
         seen.add(topic)
 
-        source   = m.get("source", m.get("source_file", ""))
-        keywords = m.get("keywords", "")
+        source = m.get("source", m.get("source_file", ""))
         screenshot_url = m.get("screenshot_url", "")
 
-        # Бейдж с источником
-        badges = ""
-        if source:
-            badges += f'<span class="step-badge badge-part">{source}</span>'
+        badge = f'<span class="step-badge badge-part">{source}</span>' if source else ""
 
         screenshot_html = ""
         if screenshot_url:
@@ -535,17 +535,10 @@ def render_step_cards(docs):
                 f'</div>'
             )
 
-        # Сниппет из текста документа
-        snippet = doc.page_content[:180].strip()
-        if len(doc.page_content) > 180:
-            snippet += "…"
-        snippet_html = f'<div class="step-summary">{snippet}</div>' if snippet else ""
-
         cards_html.append(
             f'<div class="step-card">'
             f'<div class="step-card-title">&#9881;&#65039; {topic}</div>'
-            f'<div class="step-badges">{badges}</div>'
-            f'{snippet_html}'
+            f'<div class="step-badges">{badge}</div>'
             f'{screenshot_html}'
             f'</div>'
         )
@@ -563,7 +556,7 @@ def render_assistant_message(content, log_id, avg_score=0.0,
     st.markdown(content)
 
     # Карточки шагов из RAG-контекста
-    render_step_cards(docs)
+    render_step_cards(docs, answer_text=content)
 
     # ── временный отладчик — удали после проверки ──
     if docs:
