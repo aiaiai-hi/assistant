@@ -500,8 +500,9 @@ def render_nav():
 # ═══════════════════════════════════════════════════════════════
 
 def render_step_cards(docs):
-    """Рендерит карточки шагов из метаданных RAG-документов.
-    Показывает только уникальные шаги с номером > 0 и заголовком.
+    """Рендерит карточки из RAG-документов.
+    Работает с метаданными: topic, chunk_id, keywords, source.
+    Показывает уникальные карточки (по topic).
     """
     if not docs:
         return
@@ -511,55 +512,40 @@ def render_step_cards(docs):
 
     for doc in docs:
         m = doc.metadata
-        step_num = m.get("step_number", 0)
-        # пробуем разные поля — title, step_title, topic
-        title    = (m.get("title") or m.get("step_title") or m.get("topic") or "").strip()
-        proc     = m.get("process_name", "")
-
-        if not title or step_num == 0:
+        topic = (m.get("topic") or "").strip()
+        if not topic or topic in seen:
             continue
+        seen.add(topic)
 
-        uid = (proc, step_num)
-        if uid in seen:
-            continue
-        seen.add(uid)
-
-        role     = m.get("role_name") or m.get("role", "")
-        location = m.get("location", "")
-        duration = m.get("duration", "")
-        summary  = m.get("summary", "")
-        part     = m.get("part_title", "")
+        source   = m.get("source", m.get("source_file", ""))
+        keywords = m.get("keywords", "")
         screenshot_url = m.get("screenshot_url", "")
 
+        # Бейдж с источником
         badges = ""
-        if role:
-            badges += f'<span class="step-badge badge-role">&#128100; {role}</span>'
-        if location:
-            badges += f'<span class="step-badge badge-loc">&#128205; {location}</span>'
-        if duration:
-            badges += f'<span class="step-badge badge-dur">&#9200; {duration}</span>'
-        if part:
-            badges += f'<span class="step-badge badge-part">{part}</span>'
+        if source:
+            badges += f'<span class="step-badge badge-part">{source}</span>'
 
         screenshot_html = ""
         if screenshot_url:
-            caption = m.get("screenshot_caption") or f"Шаг {step_num}"
             screenshot_html = (
                 f'<div class="step-screenshot">'
-                f'<img src="{screenshot_url}" alt="{caption}"/>'
-                f'<div class="step-screenshot-cap">{caption}</div>'
+                f'<img src="{screenshot_url}" alt="{topic}"/>'
+                f'<div class="step-screenshot-cap">{topic}</div>'
                 f'</div>'
             )
 
-        summary_html = (
-            f'<div class="step-summary">{summary}</div>' if summary else ""
-        )
+        # Сниппет из текста документа
+        snippet = doc.page_content[:180].strip()
+        if len(doc.page_content) > 180:
+            snippet += "…"
+        snippet_html = f'<div class="step-summary">{snippet}</div>' if snippet else ""
 
         cards_html.append(
             f'<div class="step-card">'
-            f'<div class="step-card-title">&#9881;&#65039; Шаг {step_num} &mdash; {title}</div>'
+            f'<div class="step-card-title">&#9881;&#65039; {topic}</div>'
             f'<div class="step-badges">{badges}</div>'
-            f'{summary_html}'
+            f'{snippet_html}'
             f'{screenshot_html}'
             f'</div>'
         )
