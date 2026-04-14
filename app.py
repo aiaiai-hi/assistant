@@ -512,7 +512,8 @@ def render_step_cards(docs):
     for doc in docs:
         m = doc.metadata
         step_num = m.get("step_number", 0)
-        title    = m.get("title") or m.get("step_title", "")
+        # пробуем разные поля — title, step_title, topic
+        title    = (m.get("title") or m.get("step_title") or m.get("topic") or "").strip()
         proc     = m.get("process_name", "")
 
         if not title or step_num == 0:
@@ -577,6 +578,11 @@ def render_assistant_message(content, log_id, avg_score=0.0,
 
     # Карточки шагов из RAG-контекста
     render_step_cards(docs)
+
+    # ── временный отладчик — удали после проверки ──
+    if docs:
+        with st.expander("🔧 debug: метаданные первого doc", expanded=False):
+            st.json(docs[0].metadata)
 
     if no_answer:
         st.markdown(
