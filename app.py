@@ -411,6 +411,47 @@ def inject_styles():
     .fb-none    { color: #d1d5db; }
 
     #last-question { scroll-margin-top: 80px; }
+
+    /* ── карточки шагов ── */
+    .step-card {
+        background: white;
+        border: 1px solid #d1fae5;
+        border-left: 3px solid #10b981;
+        border-radius: 0 10px 10px 0;
+        padding: 10px 14px;
+        margin: 6px 0;
+    }
+    .step-card-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #065f46;
+        margin-bottom: 5px;
+    }
+    .step-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .step-badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    .badge-role { background: #d1fae5; color: #065f46; }
+    .badge-loc  { background: #e0f2fe; color: #0369a1; }
+    .badge-dur  { background: #fef3c7; color: #92400e; }
+    .badge-part { background: #f3e8ff; color: #6b21a8; }
+    .step-summary { font-size: 0.82rem; color: #374151; line-height: 1.5; }
+    .step-screenshot {
+        margin-top: 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .step-screenshot img { width: 100%; display: block; }
+    .step-screenshot-cap {
+        font-size: 11px;
+        color: #6b7280;
+        padding: 4px 8px;
+        background: #f9fafb;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -457,10 +498,85 @@ def render_nav():
 # ═══════════════════════════════════════════════════════════════
 # КОМПОНЕНТЫ
 # ═══════════════════════════════════════════════════════════════
+
+def render_step_cards(docs):
+    """Рендерит карточки шагов из метаданных RAG-документов.
+    Показывает только уникальные шаги с номером > 0 и заголовком.
+    """
+    if not docs:
+        return
+
+    seen = set()
+    cards_html = []
+
+    for doc in docs:
+        m = doc.metadata
+        step_num = m.get("step_number", 0)
+        title    = m.get("title") or m.get("step_title", "")
+        proc     = m.get("process_name", "")
+
+        if not title or step_num == 0:
+            continue
+
+        uid = (proc, step_num)
+        if uid in seen:
+            continue
+        seen.add(uid)
+
+        role     = m.get("role_name") or m.get("role", "")
+        location = m.get("location", "")
+        duration = m.get("duration", "")
+        summary  = m.get("summary", "")
+        part     = m.get("part_title", "")
+        screenshot_url = m.get("screenshot_url", "")
+
+        badges = ""
+        if role:
+            badges += f'<span class="step-badge badge-role">&#128100; {role}</span>'
+        if location:
+            badges += f'<span class="step-badge badge-loc">&#128205; {location}</span>'
+        if duration:
+            badges += f'<span class="step-badge badge-dur">&#9200; {duration}</span>'
+        if part:
+            badges += f'<span class="step-badge badge-part">{part}</span>'
+
+        screenshot_html = ""
+        if screenshot_url:
+            caption = m.get("screenshot_caption") or f"Шаг {step_num}"
+            screenshot_html = (
+                f'<div class="step-screenshot">'
+                f'<img src="{screenshot_url}" alt="{caption}"/>'
+                f'<div class="step-screenshot-cap">{caption}</div>'
+                f'</div>'
+            )
+
+        summary_html = (
+            f'<div class="step-summary">{summary}</div>' if summary else ""
+        )
+
+        cards_html.append(
+            f'<div class="step-card">'
+            f'<div class="step-card-title">&#9881;&#65039; Шаг {step_num} &mdash; {title}</div>'
+            f'<div class="step-badges">{badges}</div>'
+            f'{summary_html}'
+            f'{screenshot_html}'
+            f'</div>'
+        )
+
+    if cards_html:
+        st.markdown(
+            '<div style="margin-top:8px">' + "".join(cards_html) + "</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_assistant_message(content, log_id, avg_score=0.0,
                               no_answer=False, docs=None, scores=None,
                               next_step=False):
     st.markdown(content)
+
+    # Карточки шагов из RAG-контекста
+    render_step_cards(docs)
 
     if no_answer:
         st.markdown(
@@ -564,6 +680,8 @@ def page_chat(vectorstore, api_key):
                     avg_score  = msg.get("avg_score", 0.0),
                     no_answer  = msg.get("no_answer", False),
                     next_step  = msg.get("next_step", False),
+                    docs       = msg.get("docs"),
+                    scores     = msg.get("scores"),
                 )
             else:
                 st.markdown(msg["content"])
@@ -608,6 +726,8 @@ def process_question(question, vectorstore, api_key):
             avg_score = float(avg_score),
             no_answer = no_answer,
             next_step = next_step,
+            docs      = docs,
+            scores    = scores,
         )
         if latency:
             st.caption(f"⏱️ {latency} сек")
@@ -634,7 +754,9 @@ def process_question(question, vectorstore, api_key):
         "next_step" : next_step,
         "topic"     : topic,
         "feedback"  : None,
-        "latency": latency,
+        "latency"   : latency,
+        "docs"      : docs,
+        "scores"    : scores,
     })
 
     if next_step:
