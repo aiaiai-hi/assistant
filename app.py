@@ -816,7 +816,7 @@ def render_tab_block(tab_name: str, fields_html: str) -> str:
     return (
         f'<div class="sc-secondary">'
         f'<div class="sc-tab">'
-        f'<div class="sc-tab-hdr" onclick="scToggleTab(this)">'
+        f'<div class="sc-tab-hdr">'
         f'<span class="sc-tri">▶</span> Вкладка: {tab_name}'
         f'</div>'
         f'<div class="sc-tab-body">{fields_html}</div>'
@@ -927,15 +927,20 @@ function sendHeight() {
   var h = document.body.scrollHeight;
   window.parent.postMessage({type:'streamlit:setFrameHeight', height:h}, '*');
 }
-function scToggleTab(el) {
-  var body = el.nextElementSibling;
-  var tri  = el.querySelector('.sc-tri');
-  var open = body.style.display === 'flex';
-  body.style.display = open ? 'none' : 'flex';
-  tri.style.transform = open ? '' : 'rotate(90deg)';
-  setTimeout(sendHeight, 50);
-}
-window.addEventListener('load', sendHeight);
+// Вешаем обработчики через addEventListener — не через onclick атрибуты
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {
+    hdr.addEventListener('click', function() {
+      var body = hdr.nextElementSibling;
+      var tri  = hdr.querySelector('.sc-tri');
+      var open = body.style.display === 'flex';
+      body.style.display = open ? 'none' : 'flex';
+      tri.style.transform = open ? '' : 'rotate(90deg)';
+      setTimeout(sendHeight, 50);
+    });
+  });
+  sendHeight();
+});
 </script>
 """
 
