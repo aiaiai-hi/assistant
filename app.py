@@ -482,7 +482,7 @@ def inject_styles():
         color: #374151;
         line-height: 1.7;
     }
-    .sc-body { display: flex; flex-direction: column; gap: 5px; }
+    .sc-body { display: flex; flex-direction: column; }
     .sc-line {
         font-size: 0.87rem;
         color: #374151;
@@ -490,17 +490,34 @@ def inject_styles():
         padding: 4px 0;
     }
     .sc-action {
-        padding: 6px 10px;
-        background: #f0fdf8;
-        border-radius: 6px;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 2px;
+        font-size: 0.87rem;
         color: #1f2937;
+        border-bottom: 0.5px solid #f0fdf8;
+    }
+    .sc-action-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        margin-top: 6px;
+        flex-shrink: 0;
     }
     .sc-result {
-        padding: 6px 10px;
-        background: #dcfce7;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        background: #f0fdf8;
+        border-top: 0.5px solid #d1fae5;
         border-radius: 6px;
-        color: #166534;
+        color: #065f46;
         font-weight: 500;
+        font-size: 0.87rem;
+        margin-top: 4px;
     }
     .sc-note {
         padding: 6px 10px;
@@ -730,7 +747,12 @@ def render_leaf(leaf: dict) -> str:
 
     if ltype == "action":
         text = leaf.get("text", "")
-        return f'<div class="sc-line sc-action">→ {text}</div>'
+        return (
+            f'<div class="sc-action">'
+            f'<span class="sc-action-dot"></span>'
+            f'<span>{text}</span>'
+            f'</div>'
+        )
 
     elif ltype == "note":
         text = leaf.get("text", "")
@@ -738,7 +760,7 @@ def render_leaf(leaf: dict) -> str:
 
     elif ltype == "result":
         text = leaf.get("text", "")
-        return f'<div class="sc-line sc-result">✅ {text}</div>'
+        return f'<div class="sc-result">✅ {text}</div>'
 
     elif ltype == "info":
         text = leaf.get("text", "")
@@ -758,7 +780,7 @@ def render_leaf(leaf: dict) -> str:
         return render_field(leaf)
 
     elif ltype == "tab":
-        tab_name = leaf.get("tab_name", "")
+        tab_name   = leaf.get("tab_name", "")
         fields_html = "".join(render_field(f) for f in leaf.get("fields", []))
         uid = tab_name.replace(" ", "_")
         return (
@@ -783,6 +805,49 @@ def render_leaf(leaf: dict) -> str:
         )
 
     return f'<div class="sc-line">{leaf.get("text","")}</div>'
+
+
+def render_leaves_grouped(leaves: list) -> str:
+    """Рендерит листья, группируя field-листья по полю tab в сворачиваемые вкладки."""
+    from collections import defaultdict
+
+    # Разбиваем на сегменты: либо не-field листья, либо группы полей по tab
+    html_parts = []
+    tab_groups = defaultdict(list)
+
+    # Сначала собираем все поля в группы по вкладкам
+    for leaf in leaves:
+        if leaf.get("type") == "field" and leaf.get("tab"):
+            tab_groups[leaf["tab"]].append(leaf)
+
+    # Рендерим в порядке появления
+    seen_tabs = set()
+    for leaf in leaves:
+        ltype = leaf.get("type")
+        tab   = leaf.get("tab", "")
+
+        if ltype == "field" and tab:
+            # Первый раз встречаем эту вкладку — рендерим всю группу
+            if tab not in seen_tabs:
+                seen_tabs.add(tab)
+                uid = tab.replace(" ", "_")
+                fields_html = "".join(render_field(f) for f in tab_groups[tab])
+                html_parts.append(
+                    f'<div class="sc-tab">'
+                    f'<div class="sc-tab-header" onclick="toggleScTab(\'{uid}\')">'
+                    f'<span class="sc-tri" id="sc_tri_{uid}">▶</span>'
+                    f' Вкладка: {tab} ({len(tab_groups[tab])} пол.)'
+                    f'</div>'
+                    f'<div class="sc-tab-body" id="sc_tab_{uid}">{fields_html}</div>'
+                    f'</div>'
+                )
+        elif ltype == "field" and not tab:
+            # Поле без вкладки — рендерим напрямую
+            html_parts.append(render_field(leaf))
+        else:
+            html_parts.append(render_leaf(leaf))
+
+    return "".join(html_parts)
 
 
 def render_field(field: dict) -> str:
@@ -880,7 +945,7 @@ def render_step_card_html(card, docs=None):
     if stage:
         badges += f'<span class="sc-badge sc-badge-stage">{stage}</span>'
 
-    leaves_html = "".join(render_leaf(leaf) for leaf in step_data.get("leaves", []))
+    leaves_html = render_leaves_grouped(step_data.get("leaves", []))
 
     st.markdown(f"""
 <div class="sc-card">
@@ -888,17 +953,21 @@ def render_step_card_html(card, docs=None):
   <div class="sc-title">{title}</div>
   <div class="sc-badges">{badges}</div>
   <div class="sc-body">{leaves_html}</div>
-</div>
+</div>""", unsafe_allow_html=True)
+
+    # JS для вкладок — через components чтобы не вырезался Streamlit
+    st.components.v1.html("""
 <script>
-function toggleTab(id) {{
-  var body = document.getElementById('tab_' + id);
-  var tri  = document.getElementById('tri_' + id);
+function toggleScTab(id) {
+  var body = window.parent.document.getElementById('sc_tab_' + id);
+  var tri  = window.parent.document.getElementById('sc_tri_' + id);
   if (!body) return;
-  var open = body.style.display !== 'none' && body.style.display !== '';
-  body.style.display = open ? 'none' : 'block';
-  tri.style.transform = open ? '' : 'rotate(90deg)';
-}}
-</script>""", unsafe_allow_html=True)
+  var isOpen = body.style.display === 'flex' || body.style.display === 'block';
+  body.style.display = isOpen ? 'none' : 'flex';
+  tri.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+</script>
+""", height=0)
 
 
 def render_assistant_message(content, log_id, avg_score=0.0,
