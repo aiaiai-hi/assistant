@@ -876,11 +876,12 @@ def render_leaves_grouped(leaves: list) -> str:
 
 
 def build_card_css() -> str:
-    """CSS для карточки шага — встраивается в st.components чтобы onclick работал."""
+    """CSS + JS для карточки шага в st.components iframe."""
     return """
 <style>
+body{margin:0;padding:0;overflow:hidden}
 .sc-card{background:white;border:1px solid #d1fae5;border-left:4px solid #10b981;
-  border-radius:0 12px 12px 0;padding:14px 16px;margin:4px 0;font-family:sans-serif}
+  border-radius:0 12px 12px 0;padding:14px 16px;margin:2px 0;font-family:sans-serif}
 .sc-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
 .sc-counter{font-size:11px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.06em}
 .sc-process{font-size:11px;color:#6b7280}
@@ -903,7 +904,7 @@ def build_card_css() -> str:
 .sc-shared{padding:6px 10px;background:#f5f5f4;border:0.5px solid #d6d3d1;border-radius:6px;font-size:12px;color:#44403c}
 .sc-shared-deadline{font-size:11px;color:#92400e;margin-top:2px}
 .sc-shared-note{font-size:11px;color:#6b7280;margin-top:2px}
-.sc-tab{border-radius:8px;overflow:hidden}
+.sc-tab{border-radius:8px;overflow:hidden;margin-bottom:2px}
 .sc-tab-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;
   background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none}
 .sc-tab-hdr:hover{background:#dbeafe}
@@ -922,13 +923,19 @@ def build_card_css() -> str:
 .sc-val{font-size:11px;padding:3px 8px;background:#f9fafb;border-radius:6px;color:#374151}
 </style>
 <script>
+function sendHeight() {
+  var h = document.body.scrollHeight;
+  window.parent.postMessage({type:'streamlit:setFrameHeight', height:h}, '*');
+}
 function scToggleTab(el) {
   var body = el.nextElementSibling;
   var tri  = el.querySelector('.sc-tri');
   var open = body.style.display === 'flex';
   body.style.display = open ? 'none' : 'flex';
   tri.style.transform = open ? '' : 'rotate(90deg)';
+  setTimeout(sendHeight, 50);
 }
+window.addEventListener('load', sendHeight);
 </script>
 """
 
@@ -1039,13 +1046,11 @@ def render_step_card_html(card, docs=None):
   <div class="sc-body">{leaves_html}</div>
 </div>"""
 
-    # Считаем высоту точнее — учитываем поля внутри вкладок
+    # Начальная высота без вкладок, при раскрытии iframe авторесайзится через postMessage
     leaves = step_data.get("leaves", [])
-    n_actions = sum(1 for l in leaves if l.get("type") in ("action", "note", "info", "result", "branch", "shared_reference"))
+    n_actions = sum(1 for l in leaves if l.get("type") in ("action","note","info","result","branch","shared_reference"))
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
-    n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
-    n_fields += sum(1 for l in leaves if l.get("type") == "field")
-    height = max(200, 100 + n_actions * 44 + n_tabs * 36 + n_fields * 52)
+    height = max(180, 100 + n_actions * 44 + n_tabs * 36)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
