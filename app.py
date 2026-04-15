@@ -1054,7 +1054,9 @@ def render_step_card_html(card, docs=None):
 <script>
 var dbg = document.getElementById('debug');
 var hdrs = document.querySelectorAll('.sc-tab-hdr');
-dbg.textContent = 'найдено вкладок: ' + hdrs.length + ' | JS работает: да';
+var bodies = document.querySelectorAll('.sc-tab-body');
+var fields = document.querySelectorAll('.sc-field');
+dbg.textContent = 'вкладок: ' + hdrs.length + ' | тел вкладок: ' + bodies.length + ' | полей внутри: ' + fields.length;
 hdrs.forEach(function(hdr, i) {{
   hdr.addEventListener('click', function() {{
     var body = hdr.nextElementSibling;
@@ -1062,7 +1064,10 @@ hdrs.forEach(function(hdr, i) {{
     var open = body.style.display === 'flex';
     body.style.display = open ? 'none' : 'flex';
     tri.style.transform = open ? '' : 'rotate(90deg)';
-    dbg.textContent = 'клик на вкладку ' + i + ' | открыта: ' + !open + ' | высота body: ' + body.scrollHeight;
+    setTimeout(function() {{
+      dbg.textContent = 'вкладка ' + i + ' открыта: ' + !open + ' | body.scrollHeight: ' + body.scrollHeight + ' | document.body.scrollHeight: ' + document.body.scrollHeight;
+      window.parent.postMessage({{type:'streamlit:setFrameHeight', height: document.body.scrollHeight + 20}}, '*');
+    }}, 100);
   }});
 }});
 </script>"""
