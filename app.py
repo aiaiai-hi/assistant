@@ -871,39 +871,8 @@ def render_leaf(leaf: dict) -> str:
 
 
 def render_leaves_grouped(leaves: list) -> str:
-    """Рендерит листья строго в порядке JSON, группируя field с одинаковым tab."""
-    from collections import OrderedDict
-
-    # Предварительно собираем группы вкладок
-    tab_groups: OrderedDict = OrderedDict()
-    for leaf in leaves:
-        if leaf.get("type") == "field" and leaf.get("tab"):
-            t = leaf["tab"]
-            if t not in tab_groups:
-                tab_groups[t] = []
-            tab_groups[t].append(leaf)
-
-    seen_tabs  = set()
-    html_parts = []
-
-    for leaf in leaves:
-        ltype = leaf.get("type")
-        tab   = leaf.get("tab", "")
-
-        if ltype == "field" and tab:
-            # Первое появление вкладки — рендерим всю группу на этом месте
-            if tab not in seen_tabs:
-                seen_tabs.add(tab)
-                fields_html = "".join(render_field(f) for f in tab_groups[tab])
-                html_parts.append(render_tab_block(tab, fields_html))
-            # Повторные поля той же вкладки — пропускаем (уже включены в группу)
-        elif ltype == "field" and not tab:
-            # Поле без вкладки — на своём месте, с отступом
-            html_parts.append(f'<div class="sc-secondary">{render_field(leaf)}</div>')
-        else:
-            html_parts.append(render_leaf(leaf))
-
-    return "".join(render_leaf(l) for l in leaves)
+    """Рендерит листья строго в порядке JSON — поля уже вложены в tab.fields."""
+    return "".join(render_leaf(leaf) for leaf in leaves)
 
 
 def build_card_css() -> str:
@@ -1070,10 +1039,13 @@ def render_step_card_html(card, docs=None):
   <div class="sc-body">{leaves_html}</div>
 </div>"""
 
-    # Считаем высоту с запасом на вкладки и поля
-    n_leaves = len(step_data.get("leaves", []))
-    n_fields = sum(1 for l in step_data.get("leaves", []) if l.get("type") == "field")
-    height   = max(250, 140 + n_leaves * 48 + n_fields * 60)
+    # Считаем высоту точнее — учитываем поля внутри вкладок
+    leaves = step_data.get("leaves", [])
+    n_actions = sum(1 for l in leaves if l.get("type") in ("action", "note", "info", "result", "branch", "shared_reference"))
+    n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
+    n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
+    n_fields += sum(1 for l in leaves if l.get("type") == "field")
+    height = max(200, 100 + n_actions * 44 + n_tabs * 36 + n_fields * 52)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
