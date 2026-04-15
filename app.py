@@ -813,17 +813,10 @@ def get_step_from_json(process_id: str, step_number: int):
 
 
 def render_tab_block(tab_name: str, fields_html: str) -> str:
-    onclick = (
-        "var b=this.nextElementSibling;"
-        "var t=this.querySelector('.sc-tri');"
-        "var open=b.style.display==='flex';"
-        "b.style.display=open?'none':'flex';"
-        "t.style.transform=open?'':'rotate(90deg)';"
-    )
     return (
         f'<div class="sc-secondary">'
         f'<div class="sc-tab">'
-        f'<div class="sc-tab-header" onclick="{onclick}">'
+        f'<div class="sc-tab-hdr" onclick="scToggleTab(this)">'
         f'<span class="sc-tri">▶</span> Вкладка: {tab_name}'
         f'</div>'
         f'<div class="sc-tab-body">{fields_html}</div>'
@@ -878,9 +871,10 @@ def render_leaf(leaf: dict) -> str:
 
 
 def render_leaves_grouped(leaves: list) -> str:
-    """Рендерит листья, группируя field с tab в сворачиваемые вкладки."""
+    """Рендерит листья строго в порядке JSON, группируя field с одинаковым tab."""
     from collections import OrderedDict
 
+    # Предварительно собираем группы вкладок
     tab_groups: OrderedDict = OrderedDict()
     for leaf in leaves:
         if leaf.get("type") == "field" and leaf.get("tab"):
@@ -897,16 +891,77 @@ def render_leaves_grouped(leaves: list) -> str:
         tab   = leaf.get("tab", "")
 
         if ltype == "field" and tab:
+            # Первое появление вкладки — рендерим всю группу на этом месте
             if tab not in seen_tabs:
                 seen_tabs.add(tab)
                 fields_html = "".join(render_field(f) for f in tab_groups[tab])
                 html_parts.append(render_tab_block(tab, fields_html))
+            # Повторные поля той же вкладки — пропускаем (уже включены в группу)
         elif ltype == "field" and not tab:
+            # Поле без вкладки — на своём месте, с отступом
             html_parts.append(f'<div class="sc-secondary">{render_field(leaf)}</div>')
         else:
             html_parts.append(render_leaf(leaf))
 
     return "".join(html_parts)
+
+
+def build_card_css() -> str:
+    """CSS для карточки шага — встраивается в st.components чтобы onclick работал."""
+    return """
+<style>
+.sc-card{background:white;border:1px solid #d1fae5;border-left:4px solid #10b981;
+  border-radius:0 12px 12px 0;padding:14px 16px;margin:4px 0;font-family:sans-serif}
+.sc-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+.sc-counter{font-size:11px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.06em}
+.sc-process{font-size:11px;color:#6b7280}
+.sc-title{font-size:15px;font-weight:700;color:#065f46;margin-bottom:8px;line-height:1.3}
+.sc-badges{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.sc-badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500}
+.sc-badge-role{background:#d1fae5;color:#065f46}
+.sc-badge-stage{background:#f3e8ff;color:#6b21a8}
+.sc-body{display:flex;flex-direction:column}
+.sc-action{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:13px;
+  color:#1f2937;border-bottom:0.5px solid #f0fdf8}
+.sc-action-dot{width:6px;height:6px;border-radius:50%;background:#10b981;margin-top:6px;flex-shrink:0}
+.sc-secondary{margin-left:22px;margin-top:3px;margin-bottom:3px}
+.sc-result{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#f0fdf8;
+  border-radius:6px;color:#065f46;font-weight:600;font-size:13px;margin-top:6px}
+.sc-note{padding:5px 10px;background:#fefce8;border:0.5px solid #fde68a;border-radius:6px;font-size:12px;color:#854d0e}
+.sc-info{padding:5px 10px;background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:6px;font-size:12px;color:#1e40af}
+.sc-branch{padding:6px 10px;background:#f5f3ff;border:0.5px solid #c4b5fd;border-radius:6px;font-size:12px;color:#3730a3}
+.sc-branch-cond{font-size:10px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.sc-shared{padding:6px 10px;background:#f5f5f4;border:0.5px solid #d6d3d1;border-radius:6px;font-size:12px;color:#44403c}
+.sc-shared-deadline{font-size:11px;color:#92400e;margin-top:2px}
+.sc-shared-note{font-size:11px;color:#6b7280;margin-top:2px}
+.sc-tab{border-radius:8px;overflow:hidden}
+.sc-tab-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;
+  background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none}
+.sc-tab-hdr:hover{background:#dbeafe}
+.sc-tri{font-size:9px;transition:transform .15s;display:inline-block}
+.sc-tab-body{background:#eff6ff;padding:0 8px 8px;display:none;flex-direction:column;gap:4px}
+.sc-field{background:white;border:0.5px solid #e5e7eb;border-radius:6px;padding:7px 10px;margin-top:2px}
+.sc-fh{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px}
+.sc-fn{font-size:12px;font-weight:600;color:#111827}
+.sc-freq{font-size:10px;padding:1px 5px;border-radius:10px;background:#fef2f2;color:#991b1b}
+.sc-fopt{font-size:10px;padding:1px 5px;border-radius:10px;background:#f3f4f6;color:#6b7280}
+.sc-ftab{font-size:10px;padding:1px 5px;border-radius:10px;background:#eff6ff;color:#1d4ed8}
+.sc-fi{font-size:11px;color:#4b5563;line-height:1.5}
+.sc-fex{font-size:11px;color:#065f46;background:#ecfdf5;padding:3px 8px;border-radius:6px;margin-top:4px}
+.sc-fnote{font-size:11px;color:#92400e;margin-top:3px}
+.sc-vals{margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.sc-val{font-size:11px;padding:3px 8px;background:#f9fafb;border-radius:6px;color:#374151}
+</style>
+<script>
+function scToggleTab(el) {
+  var body = el.nextElementSibling;
+  var tri  = el.querySelector('.sc-tri');
+  var open = body.style.display === 'flex';
+  body.style.display = open ? 'none' : 'flex';
+  tri.style.transform = open ? '' : 'rotate(90deg)';
+}
+</script>
+"""
 
 
 def render_field(field: dict) -> str:
@@ -1006,13 +1061,19 @@ def render_step_card_html(card, docs=None):
 
     leaves_html = render_leaves_grouped(step_data.get("leaves", []))
 
-    st.markdown(f"""
+    card_html = f"""
+{build_card_css()}
 <div class="sc-card">
   <div class="sc-top"><span class="sc-counter">ШАГ {step_num} ИЗ {total}</span>{process_html}</div>
   <div class="sc-title">{title}</div>
   <div class="sc-badges">{badges}</div>
   <div class="sc-body">{leaves_html}</div>
-</div>""", unsafe_allow_html=True)
+</div>"""
+
+    # Считаем примерную высоту — 40px на лист + базовая высота карточки
+    n_leaves = len(step_data.get("leaves", []))
+    height   = max(200, 120 + n_leaves * 44)
+    st.components.v1.html(card_html, height=height, scrolling=False)
 
 
 def render_assistant_message(content, log_id, avg_score=0.0,
