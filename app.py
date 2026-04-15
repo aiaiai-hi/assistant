@@ -493,7 +493,7 @@ def inject_styles():
         display: flex;
         align-items: flex-start;
         gap: 8px;
-        padding: 6px 2px;
+        padding: 6px 0;
         font-size: 0.87rem;
         color: #1f2937;
         border-bottom: 0.5px solid #f0fdf8;
@@ -506,6 +506,7 @@ def inject_styles():
         margin-top: 6px;
         flex-shrink: 0;
     }
+    .sc-secondary { margin-left: 22px; margin-top: 2px; margin-bottom: 4px; }
     .sc-result {
         display: flex;
         align-items: center;
@@ -517,8 +518,78 @@ def inject_styles():
         color: #065f46;
         font-weight: 500;
         font-size: 0.87rem;
-        margin-top: 4px;
+        margin-top: 6px;
     }
+    .sc-note {
+        padding: 5px 10px;
+        background: #fefce8;
+        border: 0.5px solid #fde68a;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #854d0e;
+    }
+    .sc-info {
+        padding: 5px 10px;
+        background: #eff6ff;
+        border: 0.5px solid #bfdbfe;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #1e40af;
+    }
+    .sc-branch {
+        padding: 6px 10px;
+        background: #f5f3ff;
+        border: 0.5px solid #c4b5fd;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #3730a3;
+    }
+    .sc-branch-cond {
+        font-size: 10px;
+        font-weight: 600;
+        color: #6d28d9;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 2px;
+    }
+    .sc-shared {
+        padding: 6px 10px;
+        background: #f5f5f4;
+        border: 0.5px solid #d6d3d1;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #44403c;
+    }
+    .sc-shared-deadline { font-size: 11px; color: #92400e; margin-top: 3px; }
+    .sc-shared-note     { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .sc-tab { border-radius: 8px; overflow: hidden; }
+    .sc-tab-header {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 10px; cursor: pointer;
+        background: #eff6ff; color: #1e40af;
+        font-size: 12px; font-weight: 500;
+    }
+    .sc-tab-header:hover { opacity: .88; }
+    .sc-tri { font-size: 9px; transition: transform .15s; display: inline-block; }
+    .sc-tab-body {
+        background: #eff6ff;
+        padding: 0 8px 8px;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .sc-field { background: white; border: 0.5px solid #e5e7eb; border-radius: 6px; padding: 7px 10px; }
+    .sc-field-header { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 3px; }
+    .sc-field-name { font-size: 12px; font-weight: 500; color: #111827; }
+    .sc-field-req  { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #fef2f2; color: #991b1b; }
+    .sc-field-opt  { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #f3f4f6; color: #6b7280; }
+    .sc-field-tab  { font-size: 10px; padding: 1px 5px; border-radius: 10px; background: #eff6ff; color: #1d4ed8; }
+    .sc-field-instr { font-size: 11px; color: #4b5563; line-height: 1.5; }
+    .sc-example    { font-size: 11px; color: #065f46; background: #ecfdf5; padding: 3px 8px; border-radius: 6px; margin-top: 4px; }
+    .sc-field-note { font-size: 11px; color: #92400e; margin-top: 3px; }
+    .sc-values     { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+    .sc-val-item   { font-size: 11px; padding: 3px 8px; background: #f9fafb; border-radius: 6px; color: #374151; }
+    .sc-badge-stage { background: #f3e8ff; color: #6b21a8; font-size: 11px; padding: 2px 9px; border-radius: 20px; font-weight: 500; }
     .sc-note {
         padding: 6px 10px;
         background: #fefce8;
@@ -741,8 +812,26 @@ def get_step_from_json(process_id: str, step_number: int):
     return None, data
 
 
+def render_tab_block(tab_name: str, fields_html: str) -> str:
+    onclick = (
+        "var b=this.nextElementSibling;"
+        "var t=this.querySelector('.sc-tri');"
+        "var open=b.style.display==='flex';"
+        "b.style.display=open?'none':'flex';"
+        "t.style.transform=open?'':'rotate(90deg)';"
+    )
+    return (
+        f'<div class="sc-secondary">'
+        f'<div class="sc-tab">'
+        f'<div class="sc-tab-header" onclick="{onclick}">'
+        f'<span class="sc-tri">▶</span> Вкладка: {tab_name}'
+        f'</div>'
+        f'<div class="sc-tab-body">{fields_html}</div>'
+        f'</div></div>'
+    )
+
+
 def render_leaf(leaf: dict) -> str:
-    """Рендерит один лист в HTML по его type."""
     ltype = leaf.get("type", "")
 
     if ltype == "action":
@@ -753,97 +842,67 @@ def render_leaf(leaf: dict) -> str:
             f'<span>{text}</span>'
             f'</div>'
         )
-
     elif ltype == "note":
         text = leaf.get("text", "")
-        return f'<div class="sc-line sc-note">💡 {text}</div>'
-
+        return f'<div class="sc-secondary"><div class="sc-note">💡 {text}</div></div>'
     elif ltype == "result":
         text = leaf.get("text", "")
         return f'<div class="sc-result">✅ {text}</div>'
-
     elif ltype == "info":
         text = leaf.get("text", "")
-        return f'<div class="sc-line sc-info">ℹ️ {text}</div>'
-
+        return f'<div class="sc-secondary"><div class="sc-info">ℹ️ {text}</div></div>'
     elif ltype == "branch":
         cond   = leaf.get("condition", "")
         action = leaf.get("action", "")
         return (
-            f'<div class="sc-line sc-branch">'
+            f'<div class="sc-secondary"><div class="sc-branch">'
             f'<div class="sc-branch-cond">Если: {cond}</div>'
             f'<div>{action}</div>'
-            f'</div>'
+            f'</div></div>'
         )
-
     elif ltype == "field":
         return render_field(leaf)
-
     elif ltype == "tab":
-        tab_name   = leaf.get("tab_name", "")
+        tab_name    = leaf.get("tab_name", "")
         fields_html = "".join(render_field(f) for f in leaf.get("fields", []))
-        uid = tab_name.replace(" ", "_")
-        return (
-            f'<div class="sc-tab">'
-            f'<div class="sc-tab-header" onclick="toggleTab(\'{uid}\')">'
-            f'<span class="sc-tri" id="tri_{uid}">▶</span> Вкладка: {tab_name}'
-            f'</div>'
-            f'<div class="sc-tab-body" id="tab_{uid}">{fields_html}</div>'
-            f'</div>'
-        )
-
+        return render_tab_block(tab_name, fields_html)
     elif ltype == "shared_reference":
         title    = leaf.get("title", "")
         deadline = leaf.get("deadline", "")
         note     = leaf.get("note", "")
-        deadline_html = f'<div class="sc-shared-deadline">Срок: {deadline}</div>' if deadline else ""
-        note_html     = f'<div class="sc-shared-note">{note}</div>' if note else ""
-        return (
-            f'<div class="sc-line sc-shared">'
-            f'🔗 {title}{deadline_html}{note_html}'
-            f'</div>'
-        )
+        dl_html  = f'<div class="sc-shared-deadline">Срок: {deadline}</div>' if deadline else ""
+        nt_html  = f'<div class="sc-shared-note">{note}</div>' if note else ""
+        return f'<div class="sc-secondary"><div class="sc-shared">🔗 {title}{dl_html}{nt_html}</div></div>'
 
     return f'<div class="sc-line">{leaf.get("text","")}</div>'
 
 
 def render_leaves_grouped(leaves: list) -> str:
-    """Рендерит листья, группируя field-листья по полю tab в сворачиваемые вкладки."""
-    from collections import defaultdict
+    """Рендерит листья, группируя field с tab в сворачиваемые вкладки."""
+    from collections import OrderedDict
 
-    # Разбиваем на сегменты: либо не-field листья, либо группы полей по tab
-    html_parts = []
-    tab_groups = defaultdict(list)
-
-    # Сначала собираем все поля в группы по вкладкам
+    tab_groups: OrderedDict = OrderedDict()
     for leaf in leaves:
         if leaf.get("type") == "field" and leaf.get("tab"):
-            tab_groups[leaf["tab"]].append(leaf)
+            t = leaf["tab"]
+            if t not in tab_groups:
+                tab_groups[t] = []
+            tab_groups[t].append(leaf)
 
-    # Рендерим в порядке появления
-    seen_tabs = set()
+    seen_tabs  = set()
+    html_parts = []
+
     for leaf in leaves:
         ltype = leaf.get("type")
         tab   = leaf.get("tab", "")
 
         if ltype == "field" and tab:
-            # Первый раз встречаем эту вкладку — рендерим всю группу
             if tab not in seen_tabs:
                 seen_tabs.add(tab)
-                uid = tab.replace(" ", "_")
                 fields_html = "".join(render_field(f) for f in tab_groups[tab])
-                html_parts.append(
-                    f'<div class="sc-tab">'
-                    f'<div class="sc-tab-header" onclick="toggleScTab(\'{uid}\')">'
-                    f'<span class="sc-tri" id="sc_tri_{uid}">▶</span>'
-                    f' Вкладка: {tab} ({len(tab_groups[tab])} пол.)'
-                    f'</div>'
-                    f'<div class="sc-tab-body" id="sc_tab_{uid}">{fields_html}</div>'
-                    f'</div>'
-                )
+                html_parts.append(render_tab_block(tab, fields_html))
         elif ltype == "field" and not tab:
-            # Поле без вкладки — рендерим напрямую
-            html_parts.append(render_field(leaf))
+            html_parts.append(f'<div class="sc-secondary">{render_field(leaf)}</div>')
         else:
             html_parts.append(render_leaf(leaf))
 
@@ -954,20 +1013,6 @@ def render_step_card_html(card, docs=None):
   <div class="sc-badges">{badges}</div>
   <div class="sc-body">{leaves_html}</div>
 </div>""", unsafe_allow_html=True)
-
-    # JS для вкладок — через components чтобы не вырезался Streamlit
-    st.components.v1.html("""
-<script>
-function toggleScTab(id) {
-  var body = window.parent.document.getElementById('sc_tab_' + id);
-  var tri  = window.parent.document.getElementById('sc_tri_' + id);
-  if (!body) return;
-  var isOpen = body.style.display === 'flex' || body.style.display === 'block';
-  body.style.display = isOpen ? 'none' : 'flex';
-  tri.style.transform = isOpen ? '' : 'rotate(90deg)';
-}
-</script>
-""", height=0)
 
 
 def render_assistant_message(content, log_id, avg_score=0.0,
