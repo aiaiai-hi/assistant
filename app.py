@@ -43,10 +43,14 @@ class QwenEmbeddings(Embeddings):
             json={"model": self.model, "input": texts},
             timeout=60,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        return [item["embedding"] for item in data["data"]]
+    # временно — убери после диагностики
+    if not resp.ok:
+        st.error(f"Embedding error {resp.status_code}: {resp.text}")
+    resp.raise_for_status()
+    data = resp.json()
+    return [item["embedding"] for item in data["data"]]
 
+    
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return self._embed(texts)
 
