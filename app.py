@@ -1044,12 +1044,28 @@ def render_step_card_html(card, docs=None):
 
     card_html = f"""
 {build_card_css()}
+<div id="debug" style="font-size:10px;color:red;padding:2px 4px"></div>
 <div class="sc-card">
   <div class="sc-top"><span class="sc-counter">ШАГ {step_num} ИЗ {total}</span>{process_html}</div>
   <div class="sc-title">{title}</div>
   <div class="sc-badges">{badges}</div>
   <div class="sc-body">{leaves_html}</div>
-</div>"""
+</div>
+<script>
+var dbg = document.getElementById('debug');
+var hdrs = document.querySelectorAll('.sc-tab-hdr');
+dbg.textContent = 'найдено вкладок: ' + hdrs.length + ' | JS работает: да';
+hdrs.forEach(function(hdr, i) {{
+  hdr.addEventListener('click', function() {{
+    var body = hdr.nextElementSibling;
+    var tri = hdr.querySelector('.sc-tri');
+    var open = body.style.display === 'flex';
+    body.style.display = open ? 'none' : 'flex';
+    tri.style.transform = open ? '' : 'rotate(90deg)';
+    dbg.textContent = 'клик на вкладку ' + i + ' | открыта: ' + !open + ' | высота body: ' + body.scrollHeight;
+  }});
+}});
+</script>"""
 
     # Начальная высота без вкладок, при раскрытии iframe авторесайзится через postMessage
     leaves = step_data.get("leaves", [])
