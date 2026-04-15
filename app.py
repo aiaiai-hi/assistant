@@ -973,27 +973,27 @@ def render_field(field: dict) -> str:
     values   = field.get("values", [])
     tab      = field.get("tab", "")
 
-    req_badge = '<span class="sc-field-req">обязательное</span>' if required else '<span class="sc-field-opt">необязательное</span>'
-    tab_badge = f'<span class="sc-field-tab">{tab}</span>' if tab else ""
+    req_badge = '<span class="sc-freq">обязательное</span>' if required else '<span class="sc-fopt">необязательное</span>'
+    tab_badge = f'<span class="sc-ftab">{tab}</span>' if tab else ""
 
     values_html = ""
     if values:
         items = []
         for v in values:
             if isinstance(v, dict):
-                items.append(f'<div class="sc-val-item"><b>{v.get("value","")}</b> — {v.get("description","")}</div>')
+                items.append(f'<div class="sc-val"><b>{v.get("value","")}</b> — {v.get("description","")}</div>')
             else:
-                items.append(f'<div class="sc-val-item">{v}</div>')
-        values_html = f'<div class="sc-values">{"".join(items)}</div>'
+                items.append(f'<div class="sc-val">{v}</div>')
+        values_html = f'<div class="sc-vals">{"".join(items)}</div>'
 
-    example_html = f'<div class="sc-example">Пример: {example}</div>' if example else ""
-    note_html    = f'<div class="sc-field-note">💡 {note}</div>'       if note    else ""
-    instr_html   = f'<div class="sc-field-instr">{instr}</div>'        if instr   else ""
+    example_html = f'<div class="sc-fex">Пример: {example}</div>' if example else ""
+    note_html    = f'<div class="sc-fnote">💡 {note}</div>'        if note    else ""
+    instr_html   = f'<div class="sc-fi">{instr}</div>'             if instr   else ""
 
     return (
         f'<div class="sc-field">'
-        f'<div class="sc-field-header">'
-        f'<span class="sc-field-name">{name}</span>{req_badge}{tab_badge}'
+        f'<div class="sc-fh">'
+        f'<span class="sc-fn">{name}</span>{req_badge}{tab_badge}'
         f'</div>'
         f'{instr_html}{example_html}{note_html}{values_html}'
         f'</div>'
@@ -1070,9 +1070,10 @@ def render_step_card_html(card, docs=None):
   <div class="sc-body">{leaves_html}</div>
 </div>"""
 
-    # Считаем примерную высоту — 40px на лист + базовая высота карточки
+    # Считаем высоту с запасом на вкладки и поля
     n_leaves = len(step_data.get("leaves", []))
-    height   = max(200, 120 + n_leaves * 44)
+    n_fields = sum(1 for l in step_data.get("leaves", []) if l.get("type") == "field")
+    height   = max(250, 140 + n_leaves * 48 + n_fields * 60)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
