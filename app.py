@@ -903,7 +903,7 @@ def render_leaves_grouped(leaves: list) -> str:
         else:
             html_parts.append(render_leaf(leaf))
 
-    return "".join(html_parts)
+    return "".join(render_leaf(l) for l in leaves)
 
 
 def build_card_css() -> str:
