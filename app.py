@@ -856,7 +856,7 @@ def render_leaf(leaf: dict) -> str:
     elif ltype == "field":
         return render_field(leaf)
     elif ltype == "tab":
-        tab_name    = leaf.get("tab_name", "")
+        tab_name    = leaf.get("text", "")
         fields_html = "".join(render_field(f) for f in leaf.get("fields", []))
         return render_tab_block(tab_name, fields_html)
     elif ltype == "shared_reference":
