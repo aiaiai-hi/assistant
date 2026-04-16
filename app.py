@@ -1059,10 +1059,15 @@ document.addEventListener('DOMContentLoaded', function() {{
     leaves = step_data.get("leaves", [])
     n_actions = sum(1 for l in leaves if l.get("type") in ("action","note","info","result","branch","shared_reference"))
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
-    n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
-    n_fields += sum(1 for l in leaves if l.get("type") == "field")
+    #n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
+    #n_fields += sum(1 for l in leaves if l.get("type") == "field")
     # Считаем высоту как если все вкладки открыты
-    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 100)
+    #height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 100)
+    n_fields_simple = sum(1 for l in leaves if l.get("type") == "tab" 
+                      for f in l.get("fields", []) if not f.get("values"))
+    n_fields_values = sum(1 for l in leaves if l.get("type") == "tab"
+                      for f in l.get("fields", []) if f.get("values"))
+    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields_simple * 75 + n_fields_values * 160)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
