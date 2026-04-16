@@ -881,7 +881,7 @@ def build_card_css() -> str:
 <style>
 body{margin:0;padding:0;overflow:hidden}
 .sc-card{background:white;border:1px solid #d1fae5;border-left:4px solid #10b981;
-  border-radius:0 12px 12px 0;padding:14px 16px;margin:2px 0;font-family:sans-serif}
+  border-radius:0 12px 12px 0;padding:14px 16px;margin:0;font-family:sans-serif}
 .sc-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
 .sc-counter{font-size:11px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.06em}
 .sc-process{font-size:11px;color:#6b7280}
