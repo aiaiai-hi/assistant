@@ -1062,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', function() {{
     n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
     n_fields += sum(1 for l in leaves if l.get("type") == "field")
     # Считаем высоту как если все вкладки открыты
-    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 70)+100
+    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 70+100)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
