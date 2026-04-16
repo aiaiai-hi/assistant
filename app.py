@@ -817,7 +817,7 @@ def render_tab_block(tab_name: str, fields_html: str) -> str:
         f'<div class="sc-secondary">'
         f'<div class="sc-tab">'
         f'<div class="sc-tab-hdr">'
-        f'<span class="sc-tri">▶</span> Вкладка: {tab_name}'
+        f'📋 Вкладка: {tab_name}'
         f'</div>'
         f'<div class="sc-tab-body">{fields_html}</div>'
         f'</div></div>'
@@ -905,9 +905,8 @@ body{margin:0;padding:0;overflow:hidden}
 .sc-shared-deadline{font-size:11px;color:#92400e;margin-top:2px}
 .sc-shared-note{font-size:11px;color:#6b7280;margin-top:2px}
 .sc-tab{border-radius:8px;overflow:visible;margin-bottom:2px}
-.sc-tab-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;
-  background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none;border-radius:8px}
-.sc-tab-hdr:hover{background:#dbeafe}
+.sc-tab-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;
+  background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;border-radius:8px 8px 0 0}
 .sc-tri{font-size:9px;transition:transform .15s;display:inline-block}
 .sc-tab-body{background:#eff6ff;padding:6px 8px 8px;display:flex;flex-direction:column;gap:4px;border-radius:0 0 8px 8px;min-height:10px}
 .sc-field{background:white;border:0.5px solid #e5e7eb;border-radius:6px;padding:7px 10px;margin-top:2px}
@@ -1036,38 +1035,15 @@ def render_step_card_html(card, docs=None):
   <div class="sc-title">{title}</div>
   <div class="sc-badges">{badges}</div>
   <div class="sc-body">{leaves_html}</div>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {{
-  // Вкладки открыты по умолчанию — поворачиваем треугольники
-  document.querySelectorAll('.sc-tri').forEach(function(t) {{
-    t.style.transform = 'rotate(90deg)';
-  }});
-  // Клик переключает
-  document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {{
-    hdr.addEventListener('click', function() {{
-      var body = hdr.nextElementSibling;
-      var tri  = hdr.querySelector('.sc-tri');
-      var open = body.style.display === 'flex';
-      body.style.display = open ? 'none' : 'flex';
-      tri.style.transform = open ? '' : 'rotate(90deg)';
-    }});
-  }});
-}});
-</script>"""
+</div>"""
 
     leaves = step_data.get("leaves", [])
     n_actions = sum(1 for l in leaves if l.get("type") in ("action","note","info","result","branch","shared_reference"))
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
-    #n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
-    #n_fields += sum(1 for l in leaves if l.get("type") == "field")
+    n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
+    n_fields += sum(1 for l in leaves if l.get("type") == "field")
     # Считаем высоту как если все вкладки открыты
-    #height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 100)
-    n_fields_simple = sum(1 for l in leaves if l.get("type") == "tab" 
-                      for f in l.get("fields", []) if not f.get("values"))
-    n_fields_values = sum(1 for l in leaves if l.get("type") == "tab"
-                      for f in l.get("fields", []) if f.get("values"))
-    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields_simple * 75 + n_fields_values * 160)
+    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 70)
     st.components.v1.html(card_html, height=height, scrolling=False)
 
 
