@@ -927,20 +927,7 @@ function sendHeight() {
   var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
   window.parent.postMessage({type:'streamlit:setFrameHeight', height: h + 10}, '*');
 }
-var ro = new ResizeObserver(function() { sendHeight(); });
-ro.observe(document.body);
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {
-    hdr.addEventListener('click', function() {
-      var body = hdr.nextElementSibling;
-      var tri  = hdr.querySelector('.sc-tri');
-      var open = body.style.display === 'flex';
-      body.style.display = open ? 'none' : 'flex';
-      tri.style.transform = open ? '' : 'rotate(90deg)';
-    });
-  });
-  sendHeight();
-});
+window.addEventListener('load', sendHeight);
 </script>
 """
 
@@ -1044,7 +1031,6 @@ def render_step_card_html(card, docs=None):
 
     card_html = f"""
 {build_card_css()}
-<div id="debug" style="font-size:10px;color:red;padding:2px 4px"></div>
 <div class="sc-card">
   <div class="sc-top"><span class="sc-counter">ШАГ {step_num} ИЗ {total}</span>{process_html}</div>
   <div class="sc-title">{title}</div>
@@ -1052,32 +1038,29 @@ def render_step_card_html(card, docs=None):
   <div class="sc-body">{leaves_html}</div>
 </div>
 <script>
-var dbg = document.getElementById('debug');
-var hdrs = document.querySelectorAll('.sc-tab-hdr');
-var bodies = document.querySelectorAll('.sc-tab-body');
-var fields = document.querySelectorAll('.sc-field');
-dbg.textContent = 'вкладок: ' + hdrs.length + ' | тел вкладок: ' + bodies.length + ' | полей внутри: ' + fields.length;
-hdrs.forEach(function(hdr, i) {{
-  hdr.addEventListener('click', function() {{
-    var body = hdr.nextElementSibling;
-    var tri = hdr.querySelector('.sc-tri');
-    var open = body.style.display === 'flex';
-    body.style.display = open ? 'none' : 'flex';
-    tri.style.transform = open ? '' : 'rotate(90deg)';
-    setTimeout(function() {{
-      dbg.textContent = 'вкладка ' + i + ' открыта: ' + !open + ' | body.scrollHeight: ' + body.scrollHeight + ' | document.body.scrollHeight: ' + document.body.scrollHeight;
-      window.parent.postMessage({{type:'streamlit:setFrameHeight', height: document.body.scrollHeight + 20}}, '*');
-    }}, 100);
+var ro = new ResizeObserver(function() {{
+  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+  window.parent.postMessage({{type:'streamlit:setFrameHeight', height: h + 10}}, '*');
+}});
+ro.observe(document.body);
+document.addEventListener('DOMContentLoaded', function() {{
+  document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {{
+    hdr.addEventListener('click', function() {{
+      var body = hdr.nextElementSibling;
+      var tri  = hdr.querySelector('.sc-tri');
+      var open = body.style.display === 'flex';
+      body.style.display = open ? 'none' : 'flex';
+      tri.style.transform = open ? '' : 'rotate(90deg)';
+    }});
   }});
 }});
 </script>"""
 
-    # Начальная высота без вкладок, при раскрытии iframe авторесайзится через postMessage
     leaves = step_data.get("leaves", [])
     n_actions = sum(1 for l in leaves if l.get("type") in ("action","note","info","result","branch","shared_reference"))
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
-    height = max(180, 100 + n_actions * 44 + n_tabs * 36)
-    st.components.v1.html(card_html, height=height, scrolling=False)
+    height = max(200, 100 + n_actions * 44 + n_tabs * 36)
+    st.components.v1.html(card_html, height=height, scrolling=True)
 
 
 def render_assistant_message(content, log_id, avg_score=0.0,
