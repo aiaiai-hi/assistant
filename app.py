@@ -909,7 +909,7 @@ body{margin:0;padding:0;overflow:hidden}
   background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none;border-radius:8px}
 .sc-tab-hdr:hover{background:#dbeafe}
 .sc-tri{font-size:9px;transition:transform .15s;display:inline-block}
-.sc-tab-body{background:#eff6ff;padding:6px 8px 8px;display:none;flex-direction:column;gap:4px;border-radius:0 0 8px 8px;min-height:10px}
+.sc-tab-body{background:#eff6ff;padding:6px 8px 8px;display:flex;flex-direction:column;gap:4px;border-radius:0 0 8px 8px;min-height:10px}
 .sc-field{background:white;border:0.5px solid #e5e7eb;border-radius:6px;padding:7px 10px;margin-top:2px}
 .sc-fh{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px}
 .sc-fn{font-size:12px;font-weight:600;color:#111827}
@@ -1038,12 +1038,12 @@ def render_step_card_html(card, docs=None):
   <div class="sc-body">{leaves_html}</div>
 </div>
 <script>
-var ro = new ResizeObserver(function() {{
-  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-  window.parent.postMessage({{type:'streamlit:setFrameHeight', height: h + 10}}, '*');
-}});
-ro.observe(document.body);
 document.addEventListener('DOMContentLoaded', function() {{
+  // Вкладки открыты по умолчанию — поворачиваем треугольники
+  document.querySelectorAll('.sc-tri').forEach(function(t) {{
+    t.style.transform = 'rotate(90deg)';
+  }});
+  // Клик переключает
   document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {{
     hdr.addEventListener('click', function() {{
       var body = hdr.nextElementSibling;
@@ -1059,8 +1059,11 @@ document.addEventListener('DOMContentLoaded', function() {{
     leaves = step_data.get("leaves", [])
     n_actions = sum(1 for l in leaves if l.get("type") in ("action","note","info","result","branch","shared_reference"))
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
-    height = max(200, 100 + n_actions * 44 + n_tabs * 36)
-    st.components.v1.html(card_html, height=height, scrolling=True)
+    n_fields  = sum(len(l.get("fields", [])) for l in leaves if l.get("type") == "tab")
+    n_fields += sum(1 for l in leaves if l.get("type") == "field")
+    # Считаем высоту как если все вкладки открыты
+    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields * 70)
+    st.components.v1.html(card_html, height=height, scrolling=False)
 
 
 def render_assistant_message(content, log_id, avg_score=0.0,
