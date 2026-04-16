@@ -904,12 +904,12 @@ body{margin:0;padding:0;overflow:hidden}
 .sc-shared{padding:6px 10px;background:#f5f5f4;border:0.5px solid #d6d3d1;border-radius:6px;font-size:12px;color:#44403c}
 .sc-shared-deadline{font-size:11px;color:#92400e;margin-top:2px}
 .sc-shared-note{font-size:11px;color:#6b7280;margin-top:2px}
-.sc-tab{border-radius:8px;overflow:hidden;margin-bottom:2px}
+.sc-tab{border-radius:8px;overflow:visible;margin-bottom:2px}
 .sc-tab-hdr{display:flex;align-items:center;gap:6px;padding:7px 10px;cursor:pointer;
-  background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none}
+  background:#eff6ff;color:#1e40af;font-size:12px;font-weight:600;user-select:none;border-radius:8px}
 .sc-tab-hdr:hover{background:#dbeafe}
 .sc-tri{font-size:9px;transition:transform .15s;display:inline-block}
-.sc-tab-body{background:#eff6ff;padding:0 8px 8px;display:none;flex-direction:column;gap:4px}
+.sc-tab-body{background:#eff6ff;padding:6px 8px 8px;display:none;flex-direction:column;gap:4px;border-radius:0 0 8px 8px;min-height:10px}
 .sc-field{background:white;border:0.5px solid #e5e7eb;border-radius:6px;padding:7px 10px;margin-top:2px}
 .sc-fh{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px}
 .sc-fn{font-size:12px;font-weight:600;color:#111827}
@@ -924,10 +924,11 @@ body{margin:0;padding:0;overflow:hidden}
 </style>
 <script>
 function sendHeight() {
-  var h = document.body.scrollHeight;
-  window.parent.postMessage({type:'streamlit:setFrameHeight', height:h}, '*');
+  var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+  window.parent.postMessage({type:'streamlit:setFrameHeight', height: h + 10}, '*');
 }
-// Вешаем обработчики через addEventListener — не через onclick атрибуты
+var ro = new ResizeObserver(function() { sendHeight(); });
+ro.observe(document.body);
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.sc-tab-hdr').forEach(function(hdr) {
     hdr.addEventListener('click', function() {
@@ -936,7 +937,6 @@ document.addEventListener('DOMContentLoaded', function() {
       var open = body.style.display === 'flex';
       body.style.display = open ? 'none' : 'flex';
       tri.style.transform = open ? '' : 'rotate(90deg)';
-      setTimeout(sendHeight, 50);
     });
   });
   sendHeight();
