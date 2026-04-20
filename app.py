@@ -1163,8 +1163,10 @@ def render_step_card_html(card, docs=None):
         return
 
     # Рендер из реального JSON
+    # Поддержка обеих структур: старой (meta.roles) и новой (roles на верхнем уровне)
     meta = proc_data.get("meta", {})
-    roles_dict = {r["role_id"]: r["name"] for r in meta.get("roles", [])}
+    roles_list = meta.get("roles", []) or proc_data.get("roles", [])
+    roles_dict = {r["role_id"]: r["name"] for r in roles_list}
 
     title = step_data.get("title", "")
     role_id = step_data.get("role", "")
@@ -1196,7 +1198,8 @@ def render_step_card_html(card, docs=None):
     n_tabs    = sum(1 for l in leaves if l.get("type") == "tab")
     n_fields_simple = sum(1 for l in leaves if l.get("type") == "tab" for f in l.get("fields",[]) if not f.get("values"))
     n_fields_values = sum(1 for l in leaves if l.get("type") == "tab" for f in l.get("fields",[]) if f.get("values"))
-    height = max(250, 120 + n_actions * 46 + n_tabs * 38 + n_fields_simple * 80 + n_fields_values * 170)
+    base   = 110 if not leaves else 120
+    height = max(base, base + n_actions * 46 + n_tabs * 38 + n_fields_simple * 80 + n_fields_values * 170)
     st.components.v1.html(card_html, height=height, scrolling=True)
 
 
