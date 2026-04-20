@@ -1621,12 +1621,15 @@ def main():
             process_question(question, vectorstore, api_key)
 
     with st.sidebar:
+        
         st.markdown("### 🤖 Глосси v10")
         st.caption("RAG · FAISS · Qwen · Supabase")
         st.markdown("---")
         m = st.session_state.session_metrics
         st.caption(f"Вопросов в сессии: **{m['total']}**")
         st.caption(f"👍 {m['likes']}  👎 {m['dislikes']}")
+        st.markdown("---")
+        st.caption(f"Чанков в индексе: {vectorstore.index.ntotal}")
         if st.session_state.next_step_mode:
             st.info("📖 Пошаговый режим активен")
         st.markdown("---")
@@ -1637,8 +1640,9 @@ def main():
             st.session_state.pop("next_step_mode", None)
             st.session_state.pop("pending_question", None)
             st.rerun()
+        
 
-st.sidebar.caption(f"Чанков в индексе: {vectorstore.index.ntotal}")
+
 
 if __name__ == "__main__" or True:
     main()
