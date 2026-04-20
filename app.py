@@ -307,17 +307,51 @@ def rerank_docs(question: str, docs: list, scores: list, api_key: str, top_n: in
         return docs[:top_n], scores[:top_n]
 
 
+# Навигационные запросы — короткие ответы пользователя на вопрос бота
+NAV_WORDS = {
+    "1", "2", "детально", "кратко", "подробно",
+    "следующий", "следующий шаг", "дальше", "далее",
+    "продолжай", "продолжи", "еще", "ещё", "next",
+    "начни сначала", "сначала"
+}
+
+def is_nav_query(text: str) -> bool:
+    """Определяет навигационный запрос — короткий ответ на вопрос бота."""
+    t = text.strip().lower()
+    return t in NAV_WORDS or len(t) <= 3
+
+
+def get_search_query(question: str) -> str:
+    """Возвращает поисковый запрос — для навигационных берёт предыдущий вопрос."""
+    question_norm = normalize_yo(question)
+    if is_nav_query(question_norm):
+        # Берём предыдущий вопрос пользователя из истории
+        prev_questions = [
+            m["content"] for m in st.session_state.get("messages", [])
+            if m["role"] == "user"
+        ]
+        # prev_questions[-1] это текущий вопрос, берём [-2]
+        if len(prev_questions) >= 2:
+            return normalize_yo(prev_questions[-2])
+    return question_norm
+
+
 def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
     """RAG-ответ с реранкингом и принудительной загрузкой чанков процесса."""
 
     # Нормализуем е→е в вопросе
     question_norm = normalize_yo(question)
 
-    # Определяем тип процесса
+    # Для навигационных запросов используем предыдущий вопрос как поисковый
+    search_query = get_search_query(question)
+
+    # Определяем тип процесса — сначала по текущему, потом по поисковому
     process_name, process_id = detect_process_type(question_norm)
+    if not process_id:
+        process_name, process_id = detect_process_type(search_query)
 
     # Основной поиск по вопросу
-    results = vectorstore.similarity_search_with_score(question_norm, k=k)
+    results = vectorstore.similarity_search_with_score(search_query, k=k)
 
     # Если определили процесс — принудительно добавляем ВСЕ его чанки
     if process_id:
@@ -335,7 +369,7 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
 
     # Реранкинг — выбираем топ-8 если процесс определён, иначе топ-5
     top_n = 8 if process_id else 5
-    docs_list, scores_list = rerank_docs(question_norm, list(docs), list(scores), api_key, top_n=top_n)
+    docs_list, scores_list = rerank_docs(search_query, list(docs), list(scores), api_key, top_n=top_n)
     avg_score = round(sum(scores_list) / len(scores_list), 3) if scores_list else 0.0
 
     # Сортировка по step_number внутри реранкированных чанков
