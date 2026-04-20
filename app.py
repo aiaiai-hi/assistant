@@ -327,14 +327,15 @@ def rag_answer(question: str, vectorstore, api_key: str, k: int = TOP_K):
             if doc.metadata.get("process_id") == process_id and doc.page_content not in seen:
                 results.append((doc, score))
                 seen.add(doc.page_content)
-        results = sorted(results, key=lambda x: x[1])[:k]
+        # НЕ обрезаем до k — пусть реранкер выберет лучшие из всех чанков процесса
 
     docs, raw = zip(*results) if results else ([], [])
     scores = [round(float(1 / (1 + d)), 3) for d in raw]
     avg_score = round(sum(scores) / len(scores), 3) if scores else 0.0
 
-    # Реранкинг — выбираем топ-5 реально релевантных чанков
-    docs_list, scores_list = rerank_docs(question_norm, list(docs), list(scores), api_key, top_n=5)
+    # Реранкинг — выбираем топ-8 если процесс определён, иначе топ-5
+    top_n = 8 if process_id else 5
+    docs_list, scores_list = rerank_docs(question_norm, list(docs), list(scores), api_key, top_n=top_n)
     avg_score = round(sum(scores_list) / len(scores_list), 3) if scores_list else 0.0
 
     # Сортировка по step_number внутри реранкированных чанков
