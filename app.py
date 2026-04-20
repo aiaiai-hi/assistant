@@ -912,10 +912,14 @@ def parse_step_card(content):
 
 @st.cache_resource(show_spinner=False)
 def load_process_jsons():
-    """Загружает JSON-файлы процессов в память. Пока один файл."""
+    """Загружает JSON-файлы процессов в память."""
     import json, os
     files = {
         "proc_registration": "assets/proc_new_rep.json",
+        "proc_automation":   "assets/proc_new_rep.json",
+        "proc_update":       "assets/proc_new_rep.json",
+        "proc_rochange":     "assets/proc_new_rep.json",
+        "proc_delete":       "assets/proc_new_rep.json",
     }
     result = {}
     for pid, path in files.items():
@@ -925,16 +929,40 @@ def load_process_jsons():
     return result
 
 
-def get_step_from_json(process_id: str, step_number: int):
-    """Достает шаг из загруженного JSON по process_id и step_number."""
+def get_step_from_json(process_id: str, step_number):
+    """Достает шаг из загруженного JSON по process_id и step_number.
+    Поддерживает новую структуру: version + processes + roles + steps.
+    """
     processes = load_process_jsons()
     data = processes.get(process_id)
     if not data:
-        return None
+        return None, None
+
+    step_number_str = str(step_number)
+
+    # Новая структура: steps на верхнем уровне с in_processes
+    for step in data.get("steps", []):
+        if str(step.get("step_number", "")) == step_number_str:
+            in_proc = step.get("in_processes", [])
+            # Проверяем что шаг принадлежит нужному процессу
+            if in_proc == "all" or in_proc == ["all"]:
+                return step, data
+            if isinstance(in_proc, list):
+                proc_ids = []
+                for item in in_proc:
+                    for pid in str(item).split(";"):
+                        proc_ids.append(pid.strip())
+                if process_id in proc_ids:
+                    return step, data
+            # Если in_processes не указан — возвращаем шаг
+            return step, data
+
+    # Старая структура: parts → steps
     for part in data.get("parts", []):
         for step in part.get("steps", []):
-            if step.get("step_number") == step_number:
+            if str(step.get("step_number", "")) == step_number_str:
                 return step, data
+
     return None, data
 
 
