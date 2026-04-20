@@ -1,0 +1,477 @@
+{
+  "version": "3.0",
+  "processes": [
+    {
+      "process_id": "proc_registration",
+      "process_name": "Регистрация нового отчета",
+      "parent": "root_bg_knowledge_base",
+      "description": "Процесс создания и регистрации нового отчета в ИС Бизнес-Глоссарий",
+      "applies_to": [
+        "ручной отчет",
+        "автоматический отчет",
+        "полуавтоматческий отчет",
+        "отчет ИЛАOne"
+      ],
+      "trigger_words": [
+        "новый отчет",
+        "зарегистрировать",
+        "создать отчет",
+        "зарегистрировать отчет",
+        "внести отчет",
+        "внести в БГ",
+        "внести в глоссарий"
+      ],
+      "flow_summary": "Создание запроса → Выбор местоположения отчета → Заполнение запроса → Проверка целесообразности запроса → Согласование запроса → Заполнение карточки отчета, загрузка атрибутного состава →  Проверка карточки и атрибутного состава аналитиком данных →  Согласование карточки отчета Владельцем отчета →  Финальная проверка МАД и МБМ → Публикация нового отчета (Отчет внесен в реестр отчетов)"
+    },
+    {
+      "process_id": "proc_update",
+      "process_name": "Актуализация отчета",
+      "parent": "root_bg_knowledge_base",
+      "description": "Процесс обновления данных (актуализации) существующего отчета в ИС Бизнес-Глоссарий",
+      "applies_to": [
+        "ручной отчет",
+        "автоматический отчет",
+        "полуавтоматческий отчет",
+        "отчет ИЛАOne"
+      ],
+      "trigger_words": [
+        "актуализация",
+        "обновить отчет",
+        "изменить",
+        "изменить отчет"
+      ],
+      "flow_summary": "Создание запроса → Выбор местоположения отчета → Заполнение запроса → Проверка целесообразности запроса → Согласование запроса → Заполнение карточки отчета, загрузка атрибутного состава →  Проверка карточки и атрибутного состава аналитиком данных →  Согласование карточки отчета Владельцем отчета →  Финальная проверка МАД и МБМ → Публикация обновленного отчета (Изменения внесены в реестр отчетов)"
+    },
+    {
+      "process_id": "proc_automation",
+      "process_name": "Автоматизация отчета",
+      "parent": "root_bg_knowledge_base",
+      "description": "Процесс направленный на автоматизацию отчета (нового или существующего ручного отчета) в ИС Бизнес-глоссарий",
+      "applies_to": [
+        "автоматический отчет",
+        "отчет ИЛАOne"
+      ],
+      "trigger_words": [
+        "автоматизировать отчет",
+        "автоматизация",
+        "автоотчет",
+        "+автоматический отчет"
+      ],
+      "flow_summary": "Создание запроса → Выбор местоположения отчета → Заполнение запроса → Проверка целесообразности запроса → Согласование запроса → Заполнение Бизнес-инициативы → Заполнение карточки отчета, загрузка атрибутного состава →  Проверка карточки и атрибутного состава аналитиком данных →  Согласование карточки отчета Владельцем отчета → Решение по автоматизации → Согласование Бизнес-инициативы → Автоматизация отчета → Приемка результатов автоматизации → Финальная проверка МАД и МБМ → Публикация автоматизированного отчета (Отчет внесен в реестр отчетов)"
+    },
+    {
+      "process_id": "proc_rochange",
+      "process_name": "Смена владельца отчета",
+      "parent": "root_bg_knowledge_base",
+      "description": "Процесс изменения подразделения ответственного за отчет (Владельца отчета) в ИС Бизнес-глоссарий ",
+      "applies_to": [
+        "ручной отчет",
+        "автоматический отчет",
+        "полуавтоматческий отчет",
+        "отчет ИЛАOne"
+      ],
+      "trigger_words": [
+        "смена владельца отчета",
+        "сменить ВО",
+        "изменить владельца"
+      ],
+      "flow_summary": "Создание запроса → Выбор местоположения отчета → Заполнение запроса → Согласование смены Владельца отчета с новым ответственным → Проверка целесообразности запроса → Согласование запроса → Заполнение карточки отчета, загрузка атрибутного состава →  Проверка карточки и атрибутного состава аналитиком данных →  Согласование карточки отчета Владельцем отчета →  Финальная проверка МАД и МБМ → Публикация обновленного отчета (Изменения внесены в реестр отчетов)"
+    },
+    {
+      "process_id": "proc_delete",
+      "process_name": "Удаление отчета",
+      "parent": "root_bg_knowledge_base",
+      "description": "Процесс исключения отчета из реестра отчетов в ИС Бизнес-глоссарий",
+      "applies_to": [
+        "ручной отчет",
+        "автоматический отчет",
+        "полуавтоматческий отчет",
+        "отчет ИЛАOne"
+      ],
+      "trigger_words": [
+        "удалить",
+        "удаление отчета",
+        "исключить",
+        "исключение отчета"
+      ],
+      "flow_summary": "Создание запроса → Выбор местоположения отчета → Заполнение запроса → Проверка целесообразности запроса → Согласование запроса → Исключение отчета из Бизнес-глоссария"
+    }
+  ],
+  "roles": [
+    {
+      "role_id": "role_request_owner",
+      "name": "Владелец запроса",
+      "synonyms": [
+        "ВЗ",
+        "сотрудник ССП"
+      ],
+      "description": "Сотрудник ССП, ответственный за создание и ведение запросов в БГ"
+    },
+    {
+      "role_id": "role_data_analyst",
+      "name": "Аналитик данных ДБД",
+      "synonyms": [
+        "аналитик"
+      ],
+      "description": "Сотрудник ДБД, курирующий регистрацию и актуализацию отчетов в Бизнес-глоссарии "
+    },
+    {
+      "role_id": "role_report_owner",
+      "name": "Владелец отчета",
+      "synonyms": [
+        "ВО"
+      ],
+      "description": "Подразделение ответственное за отчет (определяет форму и частоту формирования отчета, его регистрацию и своевременную актуализацию)"
+    },
+    {
+      "role_id": "role_approval_rep",
+      "name": "Представитель согласования",
+      "synonyms": [
+        "согласующий",
+        "визирующий"
+      ],
+      "description": "Представитель от ССП, ответственный за согласование"
+    },
+    {
+      "role_id": "role_manager_analytics",
+      "name": "Менеджер аналитиков данных",
+      "synonyms": [
+        "МАД"
+      ],
+      "description": "Руководитель, проводящий финальную проверку метаданных"
+    },
+    {
+      "role_id": "role_manager_business_meta",
+      "name": "Менеджер бизнесметаданных",
+      "synonyms": [
+        "МБМ"
+      ],
+      "description": "Руководитель, проверяющий привязку терминов к атрибутам"
+    },
+    {
+      "role_id": "ssp",
+      "name": "ССП",
+      "synonyms": [
+        "Самостоятельное структурное подразделение",
+        "подразделение",
+        "департамент",
+        "Ответственное ССП"
+      ],
+      "description": "Подразделение банка прямого подчинения в ГО"
+    },
+    {
+      "role_id": "rf",
+      "name": "РФ",
+      "synonyms": [
+        "Региональный филиал"
+      ],
+      "description": "Региональный филиал банка"
+    },
+    {
+      "role_id": "role_developer",
+      "name": "Разработчик отчета",
+      "synonyms": [
+        "Разработчик"
+      ],
+      "description": "Ответственный за реализацию Бизнес-инициативы (автоматизацию отчета)"
+    }
+  ],
+  "steps": [
+    {
+      "step_id": "step_initial_check",
+      "step_number": 0,
+      "part_number": 0,
+      "part_title": "Проверка предварительных условий",
+      "title": "Проверка наличия условий для запроса",
+      "role": "role_request_owner",
+      "location": "Бизнес-глоссарий",
+      "duration": "не регламентировано",
+      "in_processes": [
+        "proc_registration"
+      ]
+    },
+    {
+      "step_id": "step_create_request",
+      "step_number": 1,
+      "part_number": 1,
+      "part_title": "Создание и описание запроса",
+      "title": "Создание запроса",
+      "role": "role_request_owner",
+      "location": "Бизнес-глоссарий",
+      "duration": "не регламентировано",
+      "in_processes": [
+        "proc_update",
+        "proc_delete"
+      ]
+    },
+    {
+      "step_id": "step_find_report",
+      "step_number": 1,
+      "part_number": 1,
+      "part_title": "Создание и описание запроса",
+      "title": "Выбор местоположения отчета",
+      "role": "role_request_owner",
+      "location": "Карточка запроса",
+      "duration": "не регламентировано",
+      "bg_step_name": "1. Черновик",
+      "in_processes": "all"
+    },
+    {
+      "step_id": "step_fill_request_fields",
+      "step_number": 1.1,
+      "part_number": 1,
+      "part_title": "Создание и описание запроса",
+      "title": "Заполнение запроса",
+      "role": "role_request_owner",
+      "location": "Карточка запроса",
+      "duration": "не регламентировано",
+      "bg_step_name": "А.1.1. Заполнение запроса",
+      "in_processes": "all"
+    },
+    {
+      "step_id": "step_approve_ro_change",
+      "step_number": 1.2,
+      "part_number": 2,
+      "part_title": "Согласование запроса",
+      "title": "Согласование смены Владельца отчета",
+      "role": "role_report_owner",
+      "location": "Карточка запроса",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "А.1.2. Определение Владельца Отчета (ССП)",
+      "in_processes": [
+        "proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete; proc_automation; proc_update; proc_registration"
+      ]
+    },
+    {
+      "step_id": "step_request_check",
+      "step_number": 2.1,
+      "part_number": 2,
+      "part_title": "Согласование запроса",
+      "title": "Проверка целесообразности запроса",
+      "role": "role_data_analyst",
+      "location": "Карточка запроса",
+      "deadline": "5 рабочих дней",
+      "bg_step_name": "А.2.1. Анализ целесообразности запроса",
+      "in_processes": "all"
+    },
+    {
+      "step_id": "step_approve_request",
+      "step_number": 2.2,
+      "part_number": 2,
+      "part_title": "Согласование запроса",
+      "title": "Согласование запроса",
+      "role": "role_approval_rep",
+      "location": "Карточка запроса",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "Согласование с заинтересованными ССП",
+      "in_processes": "all"
+    },
+    {
+      "step_id": "step_rep_deletion",
+      "step_number": 0,
+      "part_number": 0,
+      "part_title": "Исключение отчета",
+      "title": "Исключение отчета из Бизнес-глоссария",
+      "role": "role_data_analyst",
+      "location": "Карточка запроса",
+      "duration": "1 рабочий день",
+      "bg_step_name": "А.2.5.4 Исключение отчета из реестра отчетов",
+      "in_processes": [
+        "proc_delete"
+      ],
+      "exclude_from": [
+        "proc_automation; proc_update; proc_registration; proc_rochange"
+      ],
+      "leaves": [
+        {
+          "leaf_id": "",
+          "type": "result",
+          "text": "Отчет исключается из реестра отчетов Бизнес-глоссария.",
+          "instruction": "Отчет можно будет найти в разделе \"Архив\" в ИС \"Бизнес-глоссарий\" (переключиться на \"Архив\" можно нажав нопку \"Компас\" в левом меню под ползунком \"Рабочая область\" - и выбрать \"Архивная область\". Найти заархивированный отчет через поисковую строку в верхней части страницы. Для переключения на рабочую область также по кнопке \"Компас\" в левом меню -> выбрать \"Рабочая область\")",
+          "variants": {
+            "proc_delete": {
+              "text": "будет описан"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "step_id": "step_BI_fill",
+      "step_number": 4,
+      "part_number": 0,
+      "part_title": "Заполнение БИ",
+      "title": "Заполнение Бизнес-инициативы",
+      "role": "role_request_owner",
+      "location": "Карточка запроса",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "А.4. Детализация запроса",
+      "in_processes": "all",
+      "exclude_from": [
+        "proc_delete; proc_automation; proc_update; proc_registration; proc_rochange"
+      ]
+    },
+    {
+      "step_id": "step_fill_report_fields",
+      "step_number": 5,
+      "part_number": 3,
+      "part_title": "Работа с карточкой отчета",
+      "title": "Заполнение карточки отчета, загрузка атрибутного состава",
+      "role": "role_request_owner",
+      "location": "Карточка отчета",
+      "deadline": "3 рабочих дня",
+      "bg_step_name": "А.5 Черновик",
+      "in_processes": [
+        "proc_registration; proc_automation; proc_update; proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete"
+      ]
+    },
+    {
+      "step_id": "step_report_check",
+      "step_number": 6,
+      "part_number": 4,
+      "part_title": "Согласование отчета",
+      "title": "Проверка карточки и атрибутного состава аналитиком данных",
+      "role": "role_data_analyst",
+      "location": "Карточка отчета",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "А.6 Проверка корректности описания атрибутного состава",
+      "in_processes": [
+        "proc_registration; proc_automation; proc_update; proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete"
+      ]
+    },
+    {
+      "step_id": "step_approve_report",
+      "step_number": 7,
+      "part_number": 4,
+      "part_title": "Согласование отчета",
+      "title": "Согласование карточки отчета Владельцем отчета",
+      "role": "role_approval_rep",
+      "location": "Карточка отчета",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "А.7 Подтверждение описания атрибутного состава",
+      "in_processes": [
+        "proc_registration; proc_automation; proc_update; proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete"
+      ]
+    },
+    {
+      "step_id": "step_automation_decicion",
+      "step_number": 8,
+      "part_number": 0,
+      "part_title": "Автоматизация отчета",
+      "title": "Решение по автоматизации",
+      "role": "role_data_analyst",
+      "location": "Карточка отчета",
+      "duration": "1 рабочий день",
+      "bg_step_name": "А.8 Решение по автоматизации",
+      "in_processes": [
+        "proc_automation"
+      ],
+      "exclude_from": [
+        "proc_delete; proc_update; proc_registration; proc_rochange"
+      ]
+    },
+    {
+      "step_id": "step_approve_BI",
+      "step_number": 9,
+      "part_number": 0,
+      "part_title": "Автоматизация отчета",
+      "title": "Согласование Бизнес-инициативы",
+      "role": "role_request_owner",
+      "location": "Бизнес-инициатива",
+      "duration": "Регламентировано в Положении 611-П",
+      "bg_step_name": "Согласование БИ",
+      "in_processes": [
+        "proc_automation"
+      ],
+      "exclude_from": [
+        "proc_delete; proc_update; proc_registration; proc_rochange"
+      ]
+    },
+    {
+      "step_id": "step_automation",
+      "step_number": 11,
+      "part_number": 0,
+      "part_title": "Автоматизация отчета",
+      "title": "Автоматизация отчета",
+      "role": "role_developer",
+      "location": "Отчет",
+      "duration": "Регламентировано в Положении 611-П",
+      "bg_step_name": "А.11 Автоматизация и тестирование отчета/НД",
+      "in_processes": [
+        "proc_automation"
+      ],
+      "exclude_from": [
+        "proc_delete; proc_update; proc_registration; proc_rochange"
+      ]
+    },
+    {
+      "step_id": "step_automation_acceptance",
+      "step_number": 12,
+      "part_number": 0,
+      "part_title": "Автоматизация отчета",
+      "title": "Приемка результатов автоматизации",
+      "role": [
+        "role_report_owner",
+        "role_developer"
+      ],
+      "location": "Карточка отчета",
+      "duration": "Регламентировано в Положении 611-П",
+      "bg_step_name": "А.12 Приемка результатов реализации БИ",
+      "in_processes": [
+        "proc_automation"
+      ],
+      "exclude_from": [
+        "proc_delete; proc_update; proc_registration; proc_rochange"
+      ]
+    },
+    {
+      "step_id": "step_final_check",
+      "step_number": 13,
+      "part_number": 4,
+      "part_title": "Согласование отчета",
+      "title": "Финальная проверка МАД и МБМ",
+      "role": [
+        "role_manager_analytics",
+        "role_manager_business_meta"
+      ],
+      "location": "Карточка отчета",
+      "deadline": "2 рабочих дня",
+      "bg_step_name": "Подтверждение корректности описания МАД, МБМ",
+      "in_processes": [
+        "proc_registration; proc_automation; proc_update; proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete"
+      ]
+    },
+    {
+      "step_id": "step_rep_publication",
+      "step_number": 14,
+      "part_number": 5,
+      "part_title": "Публикация отчета",
+      "title": "Публикация нового отчета (Отчет внесен в реестр отчетов)",
+      "role": "role_data_analyst",
+      "location": "Бизнес-глоссарий",
+      "duration": "1 рабочий день",
+      "bg_step_name": "А.14 Публикация",
+      "in_processes": [
+        "proc_registration; proc_automation; proc_update; proc_rochange"
+      ],
+      "exclude_from": [
+        "proc_delete"
+      ]
+    }
+  ]
+}
