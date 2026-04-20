@@ -963,10 +963,21 @@ def load_process_jsons():
     return result
 
 
+def apply_variant(leaf: dict, pid: str) -> dict:
+    """Применяет вариант листа для конкретного процесса."""
+    variants = leaf.get("variants", {})
+    if not variants:
+        return leaf
+    override = variants.get(pid, {})
+    if not override:
+        return leaf
+    result = {**leaf, **override}
+    del result["variants"]
+    return result
+
+
 def get_step_from_json(process_id: str, step_number):
-    """Достает шаг из загруженного JSON по process_id и step_number.
-    Поддерживает новую структуру: version + processes + roles + steps.
-    """
+    """Достает шаг из JSON по process_id и step_number, применяет варианты."""
     processes = load_process_jsons()
     data = processes.get(process_id)
     if not data:
@@ -974,28 +985,52 @@ def get_step_from_json(process_id: str, step_number):
 
     step_number_str = str(step_number)
 
-    # Новая структура: steps на верхнем уровне с in_processes
-    for step in data.get("steps", []):
-        if str(step.get("step_number", "")) == step_number_str:
+    def find_step(steps_list):
+        for step in steps_list:
+            if str(step.get("step_number", "")) != step_number_str:
+                continue
             in_proc = step.get("in_processes", [])
-            # Проверяем что шаг принадлежит нужному процессу
-            if in_proc == "all" or in_proc == ["all"]:
-                return step, data
-            if isinstance(in_proc, list):
+            exclude = step.get("exclude_from", [])
+            # Проверяем exclude_from
+            if isinstance(exclude, list) and process_id in exclude:
+                continue
+            if isinstance(exclude, str) and process_id in exclude:
+                continue
+            # Проверяем in_processes
+            belongs = False
+            if not in_proc or in_proc == "all" or in_proc == ["all"]:
+                belongs = True
+            elif isinstance(in_proc, list):
                 proc_ids = []
                 for item in in_proc:
                     for pid in str(item).split(";"):
                         proc_ids.append(pid.strip())
-                if process_id in proc_ids:
-                    return step, data
-            # Если in_processes не указан — возвращаем шаг
-            return step, data
+                belongs = process_id in proc_ids
+            elif isinstance(in_proc, str):
+                belongs = process_id in [p.strip() for p in in_proc.split(",")]
+
+            if not belongs:
+                continue
+
+            # Применяем варианты листьев для process_id
+            step_copy = {**step}
+            step_copy["leaves"] = [
+                apply_variant(leaf, process_id)
+                for leaf in step.get("leaves", [])
+            ]
+            return step_copy
+        return None
+
+    # Новая структура: steps на верхнем уровне
+    step = find_step(data.get("steps", []))
+    if step:
+        return step, data
 
     # Старая структура: parts → steps
     for part in data.get("parts", []):
-        for step in part.get("steps", []):
-            if str(step.get("step_number", "")) == step_number_str:
-                return step, data
+        step = find_step(part.get("steps", []))
+        if step:
+            return step, data
 
     return None, data
 
