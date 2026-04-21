@@ -1006,11 +1006,12 @@ def get_step_from_json(process_id: str, step_number):
             elif isinstance(in_proc, list):
                 proc_ids = []
                 for item in in_proc:
-                    for pid in str(item).split(";"):
+                    for pid in str(item).replace(";", ",").split(","):
                         proc_ids.append(pid.strip())
                 belongs = process_id in proc_ids
             elif isinstance(in_proc, str):
-                belongs = process_id in [p.strip() for p in in_proc.split(",")]
+                proc_ids = [p.strip() for p in in_proc.replace(";", ",").split(",")]
+                belongs = process_id in proc_ids
 
             if not belongs:
                 continue
