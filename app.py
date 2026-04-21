@@ -1405,7 +1405,7 @@ def page_chat(vectorstore, api_key):
             if msg["role"] == "assistant":
                 render_assistant_message(
                     content    = msg["content"],
-                    log_id     = msg.get("log_id"),
+                    log_id     = f"{msg.get('log_id', 'x')}_{idx}",
                     avg_score  = msg.get("avg_score", 0.0),
                     no_answer  = msg.get("no_answer", False),
                     next_step  = msg.get("next_step", False),
@@ -1451,7 +1451,7 @@ def process_question(question, vectorstore, api_key):
         # Рендерим ответ сразу внутри chat_message("assistant")
         render_assistant_message(
             content   = answer,
-            log_id    = None,
+            log_id    = f"new_{len(st.session_state.messages)}",
             avg_score = float(avg_score),
             no_answer = no_answer,
             next_step = next_step,
