@@ -15,7 +15,6 @@ from typing import List
 # КОНФИГ
 # ═══════════════════════════════════════════════════════════════
 MODEL_NAME   = "qwen/qwen3-vl-30b-a3b-instruct"
-EMBED_MODEL  = "infloat/multilingual-e5-large"
 FAISS_PATH   = "faiss_index"
 API_BASE_URL = "https://api.vsellm.ru/v1"
 TOP_K        = 10
@@ -183,7 +182,11 @@ SYSTEM_PROMPT = """Ты — Глосси, ИИ-ассистент по рабо�
 # ═══════════════════════════════════════════════════════════════
 @st.cache_resource(show_spinner=False)
 def load_vectorstore():
-    embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+    embeddings = BankEmbeddings(
+        api_key   = API_KEY,
+        api_base  = API_BASE_URL,
+        model_name = "Qwen/Qwen3-Embedding-0.6B",
+    )
     return FAISS.load_local(
         FAISS_PATH, embeddings, allow_dangerous_deserialization=True
     )
